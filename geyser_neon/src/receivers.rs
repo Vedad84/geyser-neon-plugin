@@ -25,22 +25,22 @@ async fn serialize_and_send<T: Serialize + GetMessageType>(
         MessageType::UpdateAccount => (
             &config.update_account_topic,
             &stats.kafka_update_account,
-            &stats.kafka_error_update_account,
+            &stats.kafka_errors_update_account,
         ),
         MessageType::UpdateSlot => (
             &config.update_slot_topic,
             &stats.kafka_update_slot,
-            &stats.kafka_error_update_slot,
+            &stats.kafka_errors_update_slot,
         ),
         MessageType::NotifyTransaction => (
             &config.notify_transaction_topic,
             &stats.kafka_notify_transaction,
-            &stats.kafka_error_notify_transaction,
+            &stats.kafka_errors_notify_transaction,
         ),
         MessageType::NotifyBlock => (
             &config.notify_block_topic,
             &stats.kafka_notify_block,
-            &stats.kafka_error_notify_block,
+            &stats.kafka_errors_notify_block,
         ),
     };
 
@@ -62,7 +62,7 @@ async fn serialize_and_send<T: Serialize + GetMessageType>(
                 .fetch_add(message.len() as u64, Ordering::Relaxed);
         }
         Err(e) => {
-            stats.kafka_error_serialize.inc();
+            stats.kafka_errors_serialize.inc();
             error!("Failed to serialize {message_type} message, error {e}");
         }
     }

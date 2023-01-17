@@ -6,14 +6,14 @@ description = "Neon geyser plugin common structs"
 authors = ["NeonLabs Maintainers <maintainers@neonlabs.org>"]
 
 [dependencies]
-solana-geyser-plugin-interface = { version = "=1.14.10" }
-solana-sdk = { version = "=1.14.10" }
-solana-transaction-status = {version = "=1.14.10"}
-solana-program = { version = "=1.14.10" }
-solana-account-decoder= { version = "=1.14.10" }
+solana-geyser-plugin-interface = { version = "1.14.12" }
+solana-sdk = { version = "=1.14.12" }
+solana-transaction-status = {version = "=1.14.12" }
+solana-program = { version = "=1.14.12"}
+solana-account-decoder= { version = "=1.14.12" }
 
 chrono = "0.4.23"
-serde = "1.0.150"
-serde_with = "2.1.0"
-serde_derive = "1.0.150"
+serde = "1.0.152"
+serde_with = "2.2.0"
+serde_derive = "1.0.152"
 blake3 = "1.3.3"

@@ -10,9 +10,8 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::{
     ReplicaTransactionInfoVersions, SlotStatus,
 };
 use solana_program::hash::Hash;
-use solana_program::message::legacy::Message as LegacyMessage;
-use solana_program::message::v0::{LoadedAddresses, LoadedMessage, Message};
-use solana_program::message::SanitizedMessage;
+use solana_program::message::v0::{LoadedAddresses, Message};
+use solana_program::message::{legacy, SanitizedMessage};
 use solana_sdk::transaction::{Result as TransactionResult, SanitizedTransaction};
 use solana_sdk::transaction_context::TransactionReturnData;
 use solana_sdk::{clock::UnixTimestamp, signature::Signature};
@@ -197,19 +196,25 @@ impl From<&SanitizedTransaction> for KafkaSanitizedTransaction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KafkaLegacyMessage {
+    /// Legacy message
+    pub message: legacy::Message,
+    /// List of boolean with same length as account_keys(), each boolean value indicates if
+    /// corresponding account key is writable or not.
+    pub is_writable_account_cache: Vec<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KafkaSanitizedMessage {
     /// Sanitized legacy message
-    Legacy(LegacyMessage),
+    Legacy(KafkaLegacyMessage),
     /// Sanitized version #0 message with dynamically loaded addresses
     V0(KafkaLoadedMessage),
 }
 
 impl From<&SanitizedMessage> for KafkaSanitizedMessage {
     fn from(sanitized_message: &SanitizedMessage) -> Self {
-        match sanitized_message {
-            SanitizedMessage::Legacy(sm) => KafkaSanitizedMessage::Legacy(sm.to_owned()),
-            SanitizedMessage::V0(sm) => KafkaSanitizedMessage::V0(sm.into()),
-        }
+        sanitized_message.into()
     }
 }
 
@@ -219,15 +224,9 @@ pub struct KafkaLoadedMessage {
     pub message: Message,
     /// Addresses loaded with on-chain address lookup tables
     pub loaded_addresses: LoadedAddresses,
-}
-
-impl From<&LoadedMessage<'_>> for KafkaLoadedMessage {
-    fn from(loaded_message: &LoadedMessage) -> Self {
-        KafkaLoadedMessage {
-            message: loaded_message.message.clone().into_owned(),
-            loaded_addresses: loaded_message.loaded_addresses.clone().into_owned(),
-        }
-    }
+    /// List of boolean with same length as account_keys(), each boolean value indicates if
+    /// corresponding account key is writable or not.
+    pub is_writable_account_cache: Vec<bool>,
 }
 
 with_prefix!(transaction "transaction_");

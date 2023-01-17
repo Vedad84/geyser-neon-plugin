@@ -22,13 +22,13 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry.register(
         "kafka_bytes_sent",
         "How many bytes were sent to Kafka cluster",
-        Box::new(stats.kafka_bytes_tx.clone()),
+        stats.kafka_bytes_tx.clone(),
     );
 
     registry.register(
         "kafka_errors_serialize",
         "How many messages have not been serialized",
-        Box::new(stats.kafka_error_serialize.clone()),
+        stats.kafka_errors_serialize.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -39,7 +39,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_sent",
         "How many UpdateAccount messages have been sent",
-        Box::new(stats.kafka_update_account.clone()),
+        stats.kafka_update_account.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -50,7 +50,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_sent",
         "How many UpdateSlot messages have been sent",
-        Box::new(stats.kafka_update_slot.clone()),
+        stats.kafka_update_slot.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -61,7 +61,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_sent",
         "How many NotifyTransaction messages have been sent",
-        Box::new(stats.kafka_notify_transaction.clone()),
+        stats.kafka_notify_transaction.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -72,7 +72,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_sent",
         "How many NotifyBlock messages have been sent",
-        Box::new(stats.kafka_notify_block.clone()),
+        stats.kafka_notify_block.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -83,7 +83,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_unsent",
         "How many UpdateAccount messages have not been sent",
-        Box::new(stats.kafka_error_update_account.clone()),
+        stats.kafka_errors_update_account.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -94,7 +94,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_unsent",
         "How many UpdateSlot messages have not been sent",
-        Box::new(stats.kafka_error_update_slot.clone()),
+        stats.kafka_errors_update_slot.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -105,7 +105,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_unsent",
         "How many NotifyTransaction messages have not been sent",
-        Box::new(stats.kafka_error_notify_transaction.clone()),
+        stats.kafka_errors_notify_transaction.clone(),
     );
 
     let registry_with_label = registry.sub_registry_with_label((
@@ -116,7 +116,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     registry_with_label.register(
         "kafka_messages_unsent",
         "How many NotifyBlock messages have not been sent",
-        Box::new(stats.kafka_error_notify_block.clone()),
+        stats.kafka_errors_notify_block.clone(),
     );
 
     let metrics_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
@@ -151,7 +151,7 @@ fn make_handler(
     move |_req: Request<Body>| {
         let reg = registry.clone();
         Box::pin(async move {
-            let mut buf = Vec::new();
+            let mut buf = String::new();
             encode(&mut buf, &reg.clone())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                 .map(|_| {
