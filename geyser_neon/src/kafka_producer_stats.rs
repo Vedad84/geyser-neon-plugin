@@ -10,11 +10,11 @@ pub struct Stats {
     pub kafka_update_slot: Counter<u64, AtomicU64>,
     pub kafka_notify_transaction: Counter<u64, AtomicU64>,
     pub kafka_notify_block: Counter<u64, AtomicU64>,
-    pub kafka_error_update_account: Counter<u64, AtomicU64>,
-    pub kafka_error_update_slot: Counter<u64, AtomicU64>,
-    pub kafka_error_notify_transaction: Counter<u64, AtomicU64>,
-    pub kafka_error_notify_block: Counter<u64, AtomicU64>,
-    pub kafka_error_serialize: Counter<u64, AtomicU64>,
+    pub kafka_errors_update_account: Counter<u64, AtomicU64>,
+    pub kafka_errors_update_slot: Counter<u64, AtomicU64>,
+    pub kafka_errors_notify_transaction: Counter<u64, AtomicU64>,
+    pub kafka_errors_notify_block: Counter<u64, AtomicU64>,
+    pub kafka_errors_serialize: Counter<u64, AtomicU64>,
     pub kafka_bytes_tx: Counter<u64, AtomicU64>,
 }
 
