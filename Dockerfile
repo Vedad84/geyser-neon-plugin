@@ -7,7 +7,6 @@ COPY .github /app
 RUN cargo build --release
 RUN strip target/release/libgeyser_neon.so
 
-# TODO: use different version here
-FROM neonlabsorg/neon-validator:v1.13.4-plugin-v2
+FROM debian:buster-slim
 RUN apt-get update && apt-get install -y libsasl2-2 && rm -rf /var/cache/apt/lists
 COPY --from=0 /app/target/release/libgeyser_neon.so /opt/solana/bin/libgeyser_neon.so
