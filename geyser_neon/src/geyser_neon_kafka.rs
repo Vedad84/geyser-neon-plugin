@@ -38,7 +38,7 @@ use flume::Receiver;
 
 use crate::{
     build_info::get_build_info,
-    geyser_neon_config::GeyserPluginKafkaConfig,
+    geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_INTERNAL_QUEUE_CAPACITY},
     kafka_producer_stats::ContextWithStats,
     prometheus::start_prometheus,
     receivers::{
@@ -215,7 +215,7 @@ impl GeyserPlugin for GeyserPluginKafka {
                 let internal_queue_capacity = config
                     .internal_queue_capacity
                     .parse::<usize>()
-                    .unwrap_or(30000);
+                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
 
                 let (account_tx, account_rx) = flume::bounded(internal_queue_capacity);
                 let (slot_status_tx, slot_status_rx) = flume::bounded(internal_queue_capacity);
@@ -279,7 +279,6 @@ impl GeyserPlugin for GeyserPluginKafka {
         is_startup: bool,
     ) -> Result<()> {
         let account: KafkaReplicaAccountInfoVersions = account.into();
-        let account_tx = self.account_tx.clone();
         let retrieved_time = Utc::now().naive_utc();
 
         let update_account = UpdateAccount {
@@ -289,8 +288,10 @@ impl GeyserPlugin for GeyserPluginKafka {
             retrieved_time,
         };
 
-        match account_tx
-            .expect("Channel was not created!")
+        match self
+            .account_tx
+            .as_ref()
+            .expect("Channel for UpdateAccount was not created!")
             .send(update_account)
         {
             Ok(_) => (),
@@ -306,7 +307,6 @@ impl GeyserPlugin for GeyserPluginKafka {
         status: SlotStatus,
     ) -> Result<()> {
         let status: KafkaSlotStatus = status.into();
-        let slot_status_tx = self.slot_status_tx.clone();
         let retrieved_time = Utc::now().naive_utc();
 
         let update_account = UpdateSlotStatus {
@@ -316,8 +316,10 @@ impl GeyserPlugin for GeyserPluginKafka {
             retrieved_time,
         };
 
-        match slot_status_tx
-            .expect("Channel was not created!")
+        match self
+            .slot_status_tx
+            .as_ref()
+            .expect("Channel for UpdateSlotStatus was not created!")
             .send(update_account)
         {
             Ok(_) => (),
@@ -339,7 +341,6 @@ impl GeyserPlugin for GeyserPluginKafka {
         slot: u64,
     ) -> Result<()> {
         let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
-        let transaction_tx = self.transaction_tx.clone();
         let retrieved_time = Utc::now().naive_utc();
 
         let notify_transaction = NotifyTransaction {
@@ -348,8 +349,10 @@ impl GeyserPlugin for GeyserPluginKafka {
             retrieved_time,
         };
 
-        match transaction_tx
-            .expect("Channel was not created!")
+        match self
+            .transaction_tx
+            .as_ref()
+            .expect("Channel for NotifyTransaction was not created!")
             .send(notify_transaction)
         {
             Ok(_) => (),
@@ -361,7 +364,6 @@ impl GeyserPlugin for GeyserPluginKafka {
 
     fn notify_block_metadata(&mut self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
         let block_info: KafkaReplicaBlockInfoVersions = block_info.into();
-        let block_metadata_tx = self.block_metadata_tx.clone();
         let retrieved_time = Utc::now().naive_utc();
 
         let notify_block = NotifyBlockMetaData {
@@ -369,8 +371,10 @@ impl GeyserPlugin for GeyserPluginKafka {
             retrieved_time,
         };
 
-        match block_metadata_tx
-            .expect("Channel was not created!")
+        match self
+            .block_metadata_tx
+            .as_ref()
+            .expect("Channel for NotifyBlockMetaData was not created!")
             .send(notify_block)
         {
             Ok(_) => (),
