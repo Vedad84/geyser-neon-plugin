@@ -212,16 +212,33 @@ impl GeyserPlugin for GeyserPluginKafka {
             Ok(config) => {
                 let config = Arc::new(config);
                 self.config = Some(config.clone());
-                let internal_queue_capacity = config
-                    .internal_queue_capacity
+
+                let update_account_queue_capacity = config
+                    .update_account_queue_capacity
                     .parse::<usize>()
                     .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
 
-                let (account_tx, account_rx) = flume::bounded(internal_queue_capacity);
-                let (slot_status_tx, slot_status_rx) = flume::bounded(internal_queue_capacity);
-                let (transaction_tx, transaction_rx) = flume::bounded(internal_queue_capacity);
+                let update_slot_queue_capacity = config
+                    .update_slot_queue_capacity
+                    .parse::<usize>()
+                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+
+                let notify_transaction_queue_capacity = config
+                    .notify_transaction_queue_capacity
+                    .parse::<usize>()
+                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+
+                let notify_block_queue_capacity = config
+                    .notify_block_queue_capacity
+                    .parse::<usize>()
+                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+
+                let (account_tx, account_rx) = flume::bounded(update_account_queue_capacity);
+                let (slot_status_tx, slot_status_rx) = flume::bounded(update_slot_queue_capacity);
+                let (transaction_tx, transaction_rx) =
+                    flume::bounded(notify_transaction_queue_capacity);
                 let (block_metadata_tx, block_metadata_rx) =
-                    flume::bounded(internal_queue_capacity);
+                    flume::bounded(notify_block_queue_capacity);
 
                 self.account_tx = Some(account_tx);
                 self.slot_status_tx = Some(slot_status_tx);
