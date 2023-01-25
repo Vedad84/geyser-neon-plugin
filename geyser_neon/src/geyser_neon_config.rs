@@ -2,7 +2,7 @@ use log::LevelFilter;
 use rdkafka::config::RDKafkaLogLevel;
 use serde_derive::{Deserialize, Serialize};
 
-pub(crate) const DEFAULT_INTERNAL_QUEUE_CAPACITY: usize = 30_000;
+pub(crate) const DEFAULT_QUEUE_CAPACITY: usize = 30_000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LogLevel {
@@ -91,7 +91,10 @@ pub struct GeyserPluginKafkaConfig {
     pub producer_request_timeout_ms: String,
     pub producer_retry_backoff_ms: String,
     pub max_in_flight_requests_per_connection: String,
-    pub internal_queue_capacity: String,
+    pub update_account_queue_capacity: String,
+    pub update_slot_queue_capacity: String,
+    pub notify_transaction_queue_capacity: String,
+    pub notify_block_queue_capacity: String,
     pub compression_codec: String,
     pub compression_level: String,
     pub batch_size: String,
