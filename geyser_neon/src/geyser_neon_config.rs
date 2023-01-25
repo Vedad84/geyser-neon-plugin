@@ -2,7 +2,7 @@ use log::LevelFilter;
 use rdkafka::config::RDKafkaLogLevel;
 use serde_derive::{Deserialize, Serialize};
 
-pub(crate) const DEFAULT_INTERNAL_QUEUE_CAPACITY: usize = 30_000;
+pub(crate) const DEFAULT_QUEUE_CAPACITY: usize = 30_000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum LogLevel {

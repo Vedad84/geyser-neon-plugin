@@ -38,7 +38,7 @@ use flume::Receiver;
 
 use crate::{
     build_info::get_build_info,
-    geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_INTERNAL_QUEUE_CAPACITY},
+    geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_QUEUE_CAPACITY},
     kafka_producer_stats::ContextWithStats,
     prometheus::start_prometheus,
     receivers::{
@@ -216,22 +216,22 @@ impl GeyserPlugin for GeyserPluginKafka {
                 let update_account_queue_capacity = config
                     .update_account_queue_capacity
                     .parse::<usize>()
-                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+                    .unwrap_or(DEFAULT_QUEUE_CAPACITY);
 
                 let update_slot_queue_capacity = config
                     .update_slot_queue_capacity
                     .parse::<usize>()
-                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+                    .unwrap_or(DEFAULT_QUEUE_CAPACITY);
 
                 let notify_transaction_queue_capacity = config
                     .notify_transaction_queue_capacity
                     .parse::<usize>()
-                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+                    .unwrap_or(DEFAULT_QUEUE_CAPACITY);
 
                 let notify_block_queue_capacity = config
                     .notify_block_queue_capacity
                     .parse::<usize>()
-                    .unwrap_or(DEFAULT_INTERNAL_QUEUE_CAPACITY);
+                    .unwrap_or(DEFAULT_QUEUE_CAPACITY);
 
                 let (account_tx, account_rx) = flume::bounded(update_account_queue_capacity);
                 let (slot_status_tx, slot_status_rx) = flume::bounded(update_slot_queue_capacity);
