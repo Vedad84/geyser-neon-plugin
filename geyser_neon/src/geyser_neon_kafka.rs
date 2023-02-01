@@ -38,6 +38,7 @@ use flume::Receiver;
 
 use crate::{
     build_info::get_build_info,
+    filter::{process_account_info, process_transaction_info},
     geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_QUEUE_CAPACITY},
     kafka_producer_stats::ContextWithStats,
     prometheus::start_prometheus,
@@ -48,7 +49,7 @@ use crate::{
 
 pub struct GeyserPluginKafka {
     runtime: Arc<Runtime>,
-    config: Option<Arc<GeyserPluginKafkaConfig>>,
+    config: Arc<GeyserPluginKafkaConfig>,
     logger: &'static Logger,
     account_tx: Option<Sender<UpdateAccount>>,
     slot_status_tx: Option<Sender<UpdateSlotStatus>>,
@@ -89,7 +90,7 @@ impl GeyserPluginKafka {
 
         Self {
             runtime,
-            config: None,
+            config: Arc::new(GeyserPluginKafkaConfig::default()),
             logger,
             account_tx: None,
             slot_status_tx: None,
@@ -203,15 +204,12 @@ impl GeyserPlugin for GeyserPluginKafka {
         match result {
             Err(err) => {
                 return Err(GeyserPluginError::ConfigFileReadError {
-                    msg: format!(
-                        "The config file is not in the JSON format expected: {:?}",
-                        err
-                    ),
+                    msg: format!("The config file is not in the JSON format expected: {err:?}"),
                 })
             }
             Ok(config) => {
                 let config = Arc::new(config);
-                self.config = Some(config.clone());
+                self.config = config.clone();
 
                 let update_account_queue_capacity = config
                     .update_account_queue_capacity
@@ -295,24 +293,25 @@ impl GeyserPlugin for GeyserPluginKafka {
         slot: u64,
         is_startup: bool,
     ) -> Result<()> {
-        let account: KafkaReplicaAccountInfoVersions = account.into();
-        let retrieved_time = Utc::now().naive_utc();
+        if process_account_info(self.config.clone(), &account) {
+            let account: KafkaReplicaAccountInfoVersions = account.into();
+            let retrieved_time = Utc::now().naive_utc();
+            let update_account = UpdateAccount {
+                account,
+                slot,
+                is_startup,
+                retrieved_time,
+            };
 
-        let update_account = UpdateAccount {
-            account,
-            slot,
-            is_startup,
-            retrieved_time,
-        };
-
-        match self
-            .account_tx
-            .as_ref()
-            .expect("Channel for UpdateAccount was not created!")
-            .send(update_account)
-        {
-            Ok(_) => (),
-            Err(e) => error!("Failed to send UpdateAccount, error: {e}"),
+            match self
+                .account_tx
+                .as_ref()
+                .expect("Channel for UpdateAccount was not created!")
+                .send(update_account)
+            {
+                Ok(_) => (),
+                Err(e) => error!("Failed to send UpdateAccount, error: {e}"),
+            }
         }
         Ok(())
     }
@@ -357,23 +356,24 @@ impl GeyserPlugin for GeyserPluginKafka {
         transaction_info: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
-        let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
-        let retrieved_time = Utc::now().naive_utc();
+        if process_transaction_info(self.config.clone(), &transaction_info) {
+            let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
+            let retrieved_time = Utc::now().naive_utc();
+            let notify_transaction = NotifyTransaction {
+                transaction_info,
+                slot,
+                retrieved_time,
+            };
 
-        let notify_transaction = NotifyTransaction {
-            transaction_info,
-            slot,
-            retrieved_time,
-        };
-
-        match self
-            .transaction_tx
-            .as_ref()
-            .expect("Channel for NotifyTransaction was not created!")
-            .send(notify_transaction)
-        {
-            Ok(_) => (),
-            Err(e) => error!("Failed to send NotifyTransaction, error: {e}"),
+            match self
+                .transaction_tx
+                .as_ref()
+                .expect("Channel for NotifyTransaction was not created!")
+                .send(notify_transaction)
+            {
+                Ok(_) => (),
+                Err(e) => error!("Failed to send NotifyTransaction, error: {e}"),
+            }
         }
 
         Ok(())

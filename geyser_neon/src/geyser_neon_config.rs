@@ -1,3 +1,4 @@
+use ahash::AHashSet;
 use log::LevelFilter;
 use rdkafka::config::RDKafkaLogLevel;
 use serde_derive::{Deserialize, Serialize};
@@ -59,6 +60,18 @@ pub enum GlobalLogLevel {
     Trace,
 }
 
+impl Default for GlobalLogLevel {
+    fn default() -> Self {
+        GlobalLogLevel::Info
+    }
+}
+
+impl Default for LogLevel {
+    fn default() -> Self {
+        LogLevel::Info
+    }
+}
+
 impl From<&GlobalLogLevel> for LevelFilter {
     fn from(log_level: &GlobalLogLevel) -> Self {
         match log_level {
@@ -72,7 +85,7 @@ impl From<&GlobalLogLevel> for LevelFilter {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct GeyserPluginKafkaConfig {
     // Servers list in kafka format
     pub brokers_list: String,
@@ -110,4 +123,12 @@ pub struct GeyserPluginKafkaConfig {
     pub message_timeout_ms: String,
     pub kafka_log_level: LogLevel,
     pub global_log_level: GlobalLogLevel,
+    #[cfg(feature = "filter")]
+    pub filter_config_path: String,
+    #[cfg(feature = "filter")]
+    // Filter by account owners in base58
+    pub filter_include_owners: AHashSet<String>,
+    #[cfg(feature = "filter")]
+    // Alway include list for filter ( public keys from 32 to 44 characters in base58 )
+    pub filter_include_pubkeys: AHashSet<String>,
 }

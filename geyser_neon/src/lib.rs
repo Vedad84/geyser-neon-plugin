@@ -1,4 +1,6 @@
 pub mod build_info;
+#[cfg(feature = "filter")]
+mod filter;
 pub mod geyser_neon_config;
 pub mod geyser_neon_kafka;
 pub mod kafka_producer;
