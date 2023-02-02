@@ -1,4 +1,6 @@
+#[cfg(feature = "filter")]
 use ahash::AHashSet;
+
 use log::LevelFilter;
 use rdkafka::config::RDKafkaLogLevel;
 use serde_derive::{Deserialize, Serialize};

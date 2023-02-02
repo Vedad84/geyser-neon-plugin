@@ -8,13 +8,12 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::{
 use crate::geyser_neon_config::GeyserPluginKafkaConfig;
 
 #[inline(always)]
-pub fn check_account<'a>(
+fn check_account<'a>(
     config: Arc<GeyserPluginKafkaConfig>,
     owner: Option<&'a [u8]>,
     pubkey: &'a [u8],
 ) -> bool {
-    let empty: [u8; 0] = [];
-    let owner = bs58::encode(owner.unwrap_or_else(|| empty.as_ref())).into_string();
+    let owner = bs58::encode(owner.unwrap_or([].as_ref())).into_string();
     let pubkey = bs58::encode(pubkey).into_string();
     if config.filter_include_pubkeys.contains(&pubkey)
         || config.filter_include_owners.contains(&owner)
@@ -31,9 +30,37 @@ pub fn check_account<'a>(
 
 #[inline(always)]
 fn check_transaction(
-    _config: Arc<GeyserPluginKafkaConfig>,
-    _transaction_info: &ReplicaTransactionInfoVersions,
+    config: Arc<GeyserPluginKafkaConfig>,
+    transaction_info: &ReplicaTransactionInfoVersions,
 ) -> bool {
+    let (keys, loaded_addresses) = match transaction_info {
+        ReplicaTransactionInfoVersions::V0_0_1(replica) => (
+            replica.transaction.message().account_keys().iter(),
+            replica.transaction.get_loaded_addresses(),
+        ),
+        ReplicaTransactionInfoVersions::V0_0_2(replica) => (
+            replica.transaction.message().account_keys().iter(),
+            replica.transaction.get_loaded_addresses(),
+        ),
+    };
+
+    for i in keys {
+        if check_account(config.clone(), None, &i.to_bytes()) {
+            return true;
+        }
+    }
+
+    let pubkey_iter = loaded_addresses
+        .writable
+        .iter()
+        .chain(loaded_addresses.readonly.iter());
+
+    for i in pubkey_iter {
+        if check_account(config.clone(), None, &i.to_bytes()) {
+            return true;
+        }
+    }
+
     false
 }
 

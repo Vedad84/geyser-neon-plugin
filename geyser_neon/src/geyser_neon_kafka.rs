@@ -36,9 +36,11 @@ use fast_log::{
 
 use flume::Receiver;
 
+#[cfg(feature = "filter")]
+use crate::filter::{process_account_info, process_transaction_info};
+
 use crate::{
     build_info::get_build_info,
-    filter::{process_account_info, process_transaction_info},
     geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_QUEUE_CAPACITY},
     kafka_producer_stats::ContextWithStats,
     prometheus::start_prometheus,
@@ -46,6 +48,22 @@ use crate::{
         notify_block_loop, notify_transaction_loop, update_account_loop, update_slot_status_loop,
     },
 };
+
+#[cfg(not(feature = "filter"))]
+fn process_account_info(
+    _config: Arc<GeyserPluginKafkaConfig>,
+    _account_info: &ReplicaAccountInfoVersions,
+) -> bool {
+    true
+}
+
+#[cfg(not(feature = "filter"))]
+fn process_transaction_info(
+    _config: Arc<GeyserPluginKafkaConfig>,
+    _account_info: &ReplicaTransactionInfoVersions,
+) -> bool {
+    true
+}
 
 pub struct GeyserPluginKafka {
     runtime: Arc<Runtime>,
