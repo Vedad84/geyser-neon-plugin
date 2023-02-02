@@ -38,7 +38,7 @@ An example configuration file looks like the following:
     "notify_block_queue_capacity": "15000",
     "compression_codec": "lz4",
     "compression_level": "12",
-    "batch_size": "104857600",
+    "batch_size": "1048576000",
     "batch_num_messages": "20000",
     "linger_ms": "200",
     "acks": "-1",
@@ -46,8 +46,13 @@ An example configuration file looks like the following:
     "prometheus_port": "9090",
     "message_timeout_ms": "100000",
     "kafka_log_level": "Info",
-    "global_log_level": "Info"
+    "global_log_level": "Info",
+    "filter_config_path": "/opt/geyser/filter_config.json"
 }
+```
+If filtering of accounts and transactions *is not needed*, you need to remove filter_config_path from your config and build the project with:
+```
+cargo build --no-default-features
 ```
 In order to load the plugin at the start of the Solana validator it is necessary to add the parameter
 **--geyser-plugin-config** with the path to the config above.
