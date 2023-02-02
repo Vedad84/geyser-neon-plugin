@@ -1,6 +1,3 @@
-#[cfg(feature = "filter")]
-use ahash::AHashSet;
-
 use log::LevelFilter;
 use rdkafka::config::RDKafkaLogLevel;
 use serde_derive::{Deserialize, Serialize};
@@ -127,10 +124,4 @@ pub struct GeyserPluginKafkaConfig {
     pub global_log_level: GlobalLogLevel,
     #[cfg(feature = "filter")]
     pub filter_config_path: String,
-    #[cfg(feature = "filter")]
-    // Filter by account owners in base58
-    pub filter_include_owners: AHashSet<String>,
-    #[cfg(feature = "filter")]
-    // Alway include list for filter ( public keys from 32 to 44 characters in base58 )
-    pub filter_include_pubkeys: AHashSet<String>,
 }

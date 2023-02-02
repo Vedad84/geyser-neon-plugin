@@ -38,6 +38,8 @@ use flume::Receiver;
 
 #[cfg(feature = "filter")]
 use crate::filter::{process_account_info, process_transaction_info};
+#[cfg(feature = "filter")]
+use crate::filter_config::{read_filter_config, FilterConfig};
 
 use crate::{
     build_info::get_build_info,
@@ -51,7 +53,7 @@ use crate::{
 
 #[cfg(not(feature = "filter"))]
 fn process_account_info(
-    _config: Arc<GeyserPluginKafkaConfig>,
+    _config: Arc<FilterConfig>,
     _account_info: &ReplicaAccountInfoVersions,
 ) -> bool {
     true
@@ -59,15 +61,20 @@ fn process_account_info(
 
 #[cfg(not(feature = "filter"))]
 fn process_transaction_info(
-    _config: Arc<GeyserPluginKafkaConfig>,
+    _config: Arc<FilterConfig>,
     _account_info: &ReplicaTransactionInfoVersions,
 ) -> bool {
     true
 }
 
+#[cfg(not(feature = "filter"))]
+#[derive(Default, Debug)]
+struct FilterConfig {}
+
 pub struct GeyserPluginKafka {
     runtime: Arc<Runtime>,
     config: Arc<GeyserPluginKafkaConfig>,
+    filter_config: Arc<FilterConfig>,
     logger: &'static Logger,
     account_tx: Option<Sender<UpdateAccount>>,
     slot_status_tx: Option<Sender<UpdateSlotStatus>>,
@@ -109,6 +116,7 @@ impl GeyserPluginKafka {
         Self {
             runtime,
             config: Arc::new(GeyserPluginKafkaConfig::default()),
+            filter_config: Arc::new(FilterConfig::default()),
             logger,
             account_tx: None,
             slot_status_tx: None,
@@ -272,6 +280,15 @@ impl GeyserPlugin for GeyserPluginKafka {
             }
         }
 
+        #[cfg(feature = "filter")]
+        match read_filter_config(&self.config.filter_config_path) {
+            Ok(filter_config) => {
+                self.filter_config = Arc::new(filter_config);
+            }
+            Err(err) => {
+                error!("Failed to read filter config: {err:?}");
+            }
+        }
         Ok(())
     }
 
@@ -311,7 +328,7 @@ impl GeyserPlugin for GeyserPluginKafka {
         slot: u64,
         is_startup: bool,
     ) -> Result<()> {
-        if process_account_info(self.config.clone(), &account) {
+        if process_account_info(self.filter_config.clone(), &account) {
             let account: KafkaReplicaAccountInfoVersions = account.into();
             let retrieved_time = Utc::now().naive_utc();
             let update_account = UpdateAccount {
@@ -374,7 +391,7 @@ impl GeyserPlugin for GeyserPluginKafka {
         transaction_info: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
-        if process_transaction_info(self.config.clone(), &transaction_info) {
+        if process_transaction_info(self.filter_config.clone(), &transaction_info) {
             let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
             let retrieved_time = Utc::now().naive_utc();
             let notify_transaction = NotifyTransaction {

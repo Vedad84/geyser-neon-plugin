@@ -5,15 +5,11 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::{
     ReplicaAccountInfoVersions, ReplicaTransactionInfoVersions,
 };
 
-use crate::geyser_neon_config::GeyserPluginKafkaConfig;
+use crate::filter_config::FilterConfig;
 
 #[inline(always)]
-fn check_account<'a>(
-    config: Arc<GeyserPluginKafkaConfig>,
-    owner: Option<&'a [u8]>,
-    pubkey: &'a [u8],
-) -> bool {
-    let owner = bs58::encode(owner.unwrap_or([].as_ref())).into_string();
+fn check_account<'a>(config: Arc<FilterConfig>, owner: Option<&'a [u8]>, pubkey: &'a [u8]) -> bool {
+    let owner = bs58::encode(owner.unwrap_or_else(|| [].as_ref())).into_string();
     let pubkey = bs58::encode(pubkey).into_string();
     if config.filter_include_pubkeys.contains(&pubkey)
         || config.filter_include_owners.contains(&owner)
@@ -30,7 +26,7 @@ fn check_account<'a>(
 
 #[inline(always)]
 fn check_transaction(
-    config: Arc<GeyserPluginKafkaConfig>,
+    config: Arc<FilterConfig>,
     transaction_info: &ReplicaTransactionInfoVersions,
 ) -> bool {
     let (keys, loaded_addresses) = match transaction_info {
@@ -65,7 +61,7 @@ fn check_transaction(
 }
 
 pub fn process_transaction_info(
-    config: Arc<GeyserPluginKafkaConfig>,
+    config: Arc<FilterConfig>,
     notify_transaction: &ReplicaTransactionInfoVersions,
 ) -> bool {
     match notify_transaction {
@@ -84,7 +80,7 @@ pub fn process_transaction_info(
 }
 
 pub fn process_account_info(
-    config: Arc<GeyserPluginKafkaConfig>,
+    config: Arc<FilterConfig>,
     update_account: &ReplicaAccountInfoVersions,
 ) -> bool {
     match &update_account {
