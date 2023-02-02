@@ -36,6 +36,11 @@ use fast_log::{
 
 use flume::Receiver;
 
+#[cfg(feature = "filter")]
+use crate::filter::{process_account_info, process_transaction_info};
+#[cfg(feature = "filter")]
+use crate::filter_config::{read_filter_config, FilterConfig};
+
 use crate::{
     build_info::get_build_info,
     geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_QUEUE_CAPACITY},
@@ -46,9 +51,30 @@ use crate::{
     },
 };
 
+#[cfg(not(feature = "filter"))]
+fn process_account_info(
+    _config: Arc<FilterConfig>,
+    _account_info: &ReplicaAccountInfoVersions,
+) -> bool {
+    true
+}
+
+#[cfg(not(feature = "filter"))]
+fn process_transaction_info(
+    _config: Arc<FilterConfig>,
+    _account_info: &ReplicaTransactionInfoVersions,
+) -> bool {
+    true
+}
+
+#[cfg(not(feature = "filter"))]
+#[derive(Default, Debug)]
+struct FilterConfig {}
+
 pub struct GeyserPluginKafka {
     runtime: Arc<Runtime>,
-    config: Option<Arc<GeyserPluginKafkaConfig>>,
+    config: Arc<GeyserPluginKafkaConfig>,
+    filter_config: Arc<FilterConfig>,
     logger: &'static Logger,
     account_tx: Option<Sender<UpdateAccount>>,
     slot_status_tx: Option<Sender<UpdateSlotStatus>>,
@@ -89,7 +115,8 @@ impl GeyserPluginKafka {
 
         Self {
             runtime,
-            config: None,
+            config: Arc::new(GeyserPluginKafkaConfig::default()),
+            filter_config: Arc::new(FilterConfig::default()),
             logger,
             account_tx: None,
             slot_status_tx: None,
@@ -203,15 +230,12 @@ impl GeyserPlugin for GeyserPluginKafka {
         match result {
             Err(err) => {
                 return Err(GeyserPluginError::ConfigFileReadError {
-                    msg: format!(
-                        "The config file is not in the JSON format expected: {:?}",
-                        err
-                    ),
+                    msg: format!("The config file is not in the JSON format expected: {err:?}"),
                 })
             }
             Ok(config) => {
                 let config = Arc::new(config);
-                self.config = Some(config.clone());
+                self.config = config.clone();
 
                 let update_account_queue_capacity = config
                     .update_account_queue_capacity
@@ -256,6 +280,15 @@ impl GeyserPlugin for GeyserPluginKafka {
             }
         }
 
+        #[cfg(feature = "filter")]
+        match read_filter_config(&self.config.filter_config_path) {
+            Ok(filter_config) => {
+                self.filter_config = Arc::new(filter_config);
+            }
+            Err(err) => {
+                error!("Failed to read filter config: {err:?}");
+            }
+        }
         Ok(())
     }
 
@@ -295,24 +328,25 @@ impl GeyserPlugin for GeyserPluginKafka {
         slot: u64,
         is_startup: bool,
     ) -> Result<()> {
-        let account: KafkaReplicaAccountInfoVersions = account.into();
-        let retrieved_time = Utc::now().naive_utc();
+        if process_account_info(self.filter_config.clone(), &account) {
+            let account: KafkaReplicaAccountInfoVersions = account.into();
+            let retrieved_time = Utc::now().naive_utc();
+            let update_account = UpdateAccount {
+                account,
+                slot,
+                is_startup,
+                retrieved_time,
+            };
 
-        let update_account = UpdateAccount {
-            account,
-            slot,
-            is_startup,
-            retrieved_time,
-        };
-
-        match self
-            .account_tx
-            .as_ref()
-            .expect("Channel for UpdateAccount was not created!")
-            .send(update_account)
-        {
-            Ok(_) => (),
-            Err(e) => error!("Failed to send UpdateAccount, error: {e}"),
+            match self
+                .account_tx
+                .as_ref()
+                .expect("Channel for UpdateAccount was not created!")
+                .send(update_account)
+            {
+                Ok(_) => (),
+                Err(e) => error!("Failed to send UpdateAccount, error: {e}"),
+            }
         }
         Ok(())
     }
@@ -357,23 +391,24 @@ impl GeyserPlugin for GeyserPluginKafka {
         transaction_info: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> Result<()> {
-        let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
-        let retrieved_time = Utc::now().naive_utc();
+        if process_transaction_info(self.filter_config.clone(), &transaction_info) {
+            let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
+            let retrieved_time = Utc::now().naive_utc();
+            let notify_transaction = NotifyTransaction {
+                transaction_info,
+                slot,
+                retrieved_time,
+            };
 
-        let notify_transaction = NotifyTransaction {
-            transaction_info,
-            slot,
-            retrieved_time,
-        };
-
-        match self
-            .transaction_tx
-            .as_ref()
-            .expect("Channel for NotifyTransaction was not created!")
-            .send(notify_transaction)
-        {
-            Ok(_) => (),
-            Err(e) => error!("Failed to send NotifyTransaction, error: {e}"),
+            match self
+                .transaction_tx
+                .as_ref()
+                .expect("Channel for NotifyTransaction was not created!")
+                .send(notify_transaction)
+            {
+                Ok(_) => (),
+                Err(e) => error!("Failed to send NotifyTransaction, error: {e}"),
+            }
         }
 
         Ok(())
