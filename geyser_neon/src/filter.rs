@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use log::trace;
 use solana_geyser_plugin_interface::geyser_plugin_interface::{
     ReplicaAccountInfoVersions, ReplicaTransactionInfoVersions,
 };
@@ -14,11 +13,6 @@ fn check_account<'a>(config: Arc<FilterConfig>, owner: Option<&'a [u8]>, pubkey:
     if config.filter_include_pubkeys.contains(&pubkey)
         || config.filter_include_owners.contains(&owner)
     {
-        trace!(
-            "Add update_account entry to db queue for pubkey {}, owner {}",
-            pubkey,
-            owner
-        );
         return true;
     }
     false
