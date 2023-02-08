@@ -13,13 +13,11 @@ use kafka_common::kafka_structs::{
 };
 use rdkafka::config::RDKafkaLogLevel;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-use thiserror::Error;
 use tokio::{
     runtime::{self, Runtime},
     task::JoinHandle,
 };
 
-/// Main entry for the Kafka plugin
 use {
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
@@ -207,9 +205,6 @@ impl GeyserPluginKafka {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum GeyserPluginKafkaError {}
-
 impl std::fmt::Debug for GeyserPluginKafka {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
@@ -300,6 +295,7 @@ impl GeyserPlugin for GeyserPluginKafka {
         let update_slot_status_jhandle = self.update_slot_status_jhandle.take();
         let notify_transaction_jhandle = self.notify_transaction_jhandle.take();
         let notify_block_jhandle = self.notify_block_jhandle.take();
+        let prometheus_handle = self.prometheus_jhandle.take();
 
         self.runtime.block_on(async move {
             if let Some(handle) = update_account_jhandle {
@@ -315,6 +311,10 @@ impl GeyserPlugin for GeyserPluginKafka {
             }
 
             if let Some(handle) = notify_block_jhandle {
+                let _ = handle.await;
+            }
+
+            if let Some(handle) = prometheus_handle {
                 let _ = handle.await;
             }
         });
