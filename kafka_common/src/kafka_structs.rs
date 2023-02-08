@@ -178,10 +178,10 @@ impl From<&ReplicaTransactionInfoV2<'_>> for KafkaReplicaTransactionInfoV2 {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct KafkaSanitizedTransaction {
-    message: KafkaSanitizedMessage,
-    message_hash: Hash,
-    is_simple_vote_tx: bool,
-    signatures: Vec<Signature>,
+    pub message: KafkaSanitizedMessage,
+    pub message_hash: Hash,
+    pub is_simple_vote_tx: bool,
+    pub signatures: Vec<Signature>,
 }
 
 impl From<&SanitizedTransaction> for KafkaSanitizedTransaction {
