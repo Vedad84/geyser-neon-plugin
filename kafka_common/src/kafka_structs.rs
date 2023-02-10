@@ -1,22 +1,14 @@
-use std::fmt;
-
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use serde_with::with_prefix;
 use solana_account_decoder::parse_token::UiTokenAmount;
-use solana_geyser_plugin_interface::geyser_plugin_interface::{
-    ReplicaAccountInfo, ReplicaAccountInfoV2, ReplicaAccountInfoVersions, ReplicaBlockInfo,
-    ReplicaBlockInfoVersions, ReplicaTransactionInfo, ReplicaTransactionInfoV2,
-    ReplicaTransactionInfoVersions, SlotStatus,
-};
 use solana_program::hash::Hash;
-use solana_program::message::v0::{LoadedAddresses, Message};
-use solana_program::message::{legacy, SanitizedMessage};
-use solana_sdk::transaction::{Result as TransactionResult, SanitizedTransaction};
+use solana_program::message::legacy;
+use solana_program::message::v0::{self, LoadedAddresses};
+use solana_sdk::transaction::Result as TransactionResult;
 use solana_sdk::transaction_context::TransactionReturnData;
 use solana_sdk::{clock::UnixTimestamp, signature::Signature};
+use solana_transaction_status::Rewards;
 use solana_transaction_status::{InnerInstructions, Reward};
-use solana_transaction_status::{Rewards, TransactionStatusMeta, TransactionTokenBalance};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 /// Information about an account being updated
@@ -45,20 +37,6 @@ pub struct KafkaReplicaAccountInfo {
     /// with higher write_version should supersede the one with lower
     /// write_version.
     pub write_version: u64,
-}
-
-impl From<&ReplicaAccountInfo<'_>> for KafkaReplicaAccountInfo {
-    fn from(account_info: &ReplicaAccountInfo<'_>) -> Self {
-        KafkaReplicaAccountInfo {
-            pubkey: account_info.pubkey.to_vec(),
-            lamports: account_info.lamports,
-            owner: account_info.owner.to_vec(),
-            executable: account_info.executable,
-            rent_epoch: account_info.rent_epoch,
-            data: account_info.data.to_vec(),
-            write_version: account_info.write_version,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,146 +72,19 @@ pub struct KafkaReplicaAccountInfoV2 {
     pub txn_signature: Option<Signature>,
 }
 
-impl From<&ReplicaAccountInfoV2<'_>> for KafkaReplicaAccountInfoV2 {
-    fn from(account_info: &ReplicaAccountInfoV2<'_>) -> Self {
-        KafkaReplicaAccountInfoV2 {
-            pubkey: account_info.pubkey.to_vec(),
-            lamports: account_info.lamports,
-            owner: account_info.owner.to_vec(),
-            executable: account_info.executable,
-            rent_epoch: account_info.rent_epoch,
-            data: account_info.data.to_vec(),
-            write_version: account_info.write_version,
-            txn_signature: account_info.txn_signature.copied(),
-        }
-    }
-}
-
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+/// A wrapper to future-proof ReplicaAccountInfo handling.
+/// If there were a change to the structure of ReplicaAccountInfo,
+/// there would be new enum entry for the newer version, forcing
+/// plugin implementations to handle the change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum KafkaReplicaTransactionInfoVersions {
-    V0_0_1(KafkaReplicaTransactionInfo),
-    V0_0_2(KafkaReplicaTransactionInfoV2),
+pub enum KafkaReplicaAccountInfoVersions {
+    V0_0_1(KafkaReplicaAccountInfo),
+    V0_0_2(KafkaReplicaAccountInfoV2),
 }
-
-impl From<&ReplicaTransactionInfoVersions<'_>> for KafkaReplicaTransactionInfoVersions {
-    fn from(replica_account_info: &ReplicaTransactionInfoVersions<'_>) -> Self {
-        match *replica_account_info {
-            ReplicaTransactionInfoVersions::V0_0_1(t) => {
-                KafkaReplicaTransactionInfoVersions::V0_0_1(t.into())
-            }
-            ReplicaTransactionInfoVersions::V0_0_2(t) => {
-                KafkaReplicaTransactionInfoVersions::V0_0_2(t.into())
-            }
-        }
-    }
-}
-
-impl From<ReplicaTransactionInfoVersions<'_>> for KafkaReplicaTransactionInfoVersions {
-    fn from(replica_account_info: ReplicaTransactionInfoVersions<'_>) -> Self {
-        match replica_account_info {
-            ReplicaTransactionInfoVersions::V0_0_1(t) => {
-                KafkaReplicaTransactionInfoVersions::V0_0_1(t.into())
-            }
-            ReplicaTransactionInfoVersions::V0_0_2(t) => {
-                KafkaReplicaTransactionInfoVersions::V0_0_2(t.into())
-            }
-        }
-    }
-}
-
-impl From<&ReplicaTransactionInfo<'_>> for KafkaReplicaTransactionInfo {
-    fn from(transaction_info: &ReplicaTransactionInfo<'_>) -> Self {
-        KafkaReplicaTransactionInfo {
-            signature: *transaction_info.signature,
-            is_vote: transaction_info.is_vote,
-            transaction: transaction_info.transaction.into(),
-            transaction_status_meta: transaction_info.transaction_status_meta.into(),
-        }
-    }
-}
-
-impl From<&&ReplicaTransactionInfo<'_>> for KafkaReplicaTransactionInfo {
-    fn from(transaction_info: &&ReplicaTransactionInfo<'_>) -> Self {
-        KafkaReplicaTransactionInfo {
-            signature: *transaction_info.signature,
-            is_vote: transaction_info.is_vote,
-            transaction: transaction_info.transaction.into(),
-            transaction_status_meta: transaction_info.transaction_status_meta.into(),
-        }
-    }
-}
-
-impl From<&ReplicaTransactionInfoV2<'_>> for KafkaReplicaTransactionInfoV2 {
-    fn from(transaction_info: &ReplicaTransactionInfoV2<'_>) -> Self {
-        KafkaReplicaTransactionInfoV2 {
-            signature: *transaction_info.signature,
-            is_vote: transaction_info.is_vote,
-            transaction: transaction_info.transaction.into(),
-            transaction_status_meta: transaction_info.transaction_status_meta.into(),
-            index: transaction_info.index,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct KafkaSanitizedTransaction {
-    pub message: KafkaSanitizedMessage,
-    pub message_hash: Hash,
-    pub is_simple_vote_tx: bool,
-    pub signatures: Vec<Signature>,
-}
-
-impl From<&SanitizedTransaction> for KafkaSanitizedTransaction {
-    fn from(sanitized_transaction: &SanitizedTransaction) -> Self {
-        KafkaSanitizedTransaction {
-            message: sanitized_transaction.message().into(),
-            message_hash: *sanitized_transaction.message_hash(),
-            is_simple_vote_tx: sanitized_transaction.is_simple_vote_transaction(),
-            signatures: sanitized_transaction.signatures().to_vec(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct KafkaLegacyMessage {
-    /// Legacy message
-    pub message: legacy::Message,
-    /// List of boolean with same length as account_keys(), each boolean value indicates if
-    /// corresponding account key is writable or not.
-    pub is_writable_account_cache: Vec<bool>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum KafkaSanitizedMessage {
-    /// Sanitized legacy message
-    Legacy(KafkaLegacyMessage),
-    /// Sanitized version #0 message with dynamically loaded addresses
-    V0(KafkaLoadedMessage),
-}
-
-impl From<&SanitizedMessage> for KafkaSanitizedMessage {
-    fn from(sanitized_message: &SanitizedMessage) -> Self {
-        sanitized_message.into()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct KafkaLoadedMessage {
-    /// Message which loaded a collection of lookup table addresses
-    pub message: Message,
-    /// Addresses loaded with on-chain address lookup tables
-    pub loaded_addresses: LoadedAddresses,
-    /// List of boolean with same length as account_keys(), each boolean value indicates if
-    /// corresponding account key is writable or not.
-    pub is_writable_account_cache: Vec<bool>,
-}
-
-with_prefix!(transaction "transaction_");
-with_prefix!(transaction_meta "transaction_meta_");
 
 /// Information about a transaction
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KafkaReplicaTransactionInfo {
     /// The first signature of the transaction, used for identifying the transaction.
     pub signature: Signature,
@@ -242,36 +93,50 @@ pub struct KafkaReplicaTransactionInfo {
     pub is_vote: bool,
 
     /// The sanitized transaction.
-    #[serde(flatten, with = "transaction")]
     pub transaction: KafkaSanitizedTransaction,
 
     /// Metadata of the transaction status.
-    #[serde(flatten, with = "transaction_meta")]
     pub transaction_status_meta: KafkaTransactionStatusMeta,
 }
 
-/// Information about a transaction, including index in block
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct KafkaReplicaTransactionInfoV2 {
-    /// The first signature of the transaction, used for identifying the transaction.
-    pub signature: Signature,
-
-    /// Indicates if the transaction is a simple vote transaction.
-    pub is_vote: bool,
-
-    /// The sanitized transaction.
-    #[serde(flatten, with = "transaction")]
-    pub transaction: KafkaSanitizedTransaction,
-
-    /// Metadata of the transaction status.
-    #[serde(flatten, with = "transaction_meta")]
-    pub transaction_status_meta: KafkaTransactionStatusMeta,
-
-    /// The transaction's index in the block
-    pub index: usize,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KafkaLegacyMessage {
+    /// Legacy message
+    pub message: legacy::Message,
+    /// List of boolean with same length as account_keys(), each boolean value indicates if
+    /// corresponding account key is writable or not.
+    pub is_writable_account_cache: Vec<bool>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Combination of a version #0 message and its loaded addresses
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KafkaLoadedMessage {
+    /// Message which loaded a collection of lookup table addresses
+    pub message: v0::Message,
+    /// Addresses loaded with on-chain address lookup tables
+    pub loaded_addresses: LoadedAddresses,
+    /// List of boolean with same length as account_keys(), each boolean value indicates if
+    /// corresponding account key is writable or not.
+    pub is_writable_account_cache: Vec<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum KafkaSanitizedMessage {
+    /// Sanitized legacy message
+    Legacy(KafkaLegacyMessage),
+    /// Sanitized version #0 message with dynamically loaded addresses
+    V0(KafkaLoadedMessage),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KafkaSanitizedTransaction {
+    pub message: KafkaSanitizedMessage,
+    pub message_hash: Hash,
+    pub is_simple_vote_tx: bool,
+    pub signatures: Vec<Signature>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KafkaTransactionTokenBalance {
     pub account_index: u8,
     pub mint: String,
@@ -280,31 +145,7 @@ pub struct KafkaTransactionTokenBalance {
     pub program_id: String,
 }
 
-impl From<TransactionTokenBalance> for KafkaTransactionTokenBalance {
-    fn from(transaction_token_balance: TransactionTokenBalance) -> Self {
-        KafkaTransactionTokenBalance {
-            account_index: transaction_token_balance.account_index,
-            mint: transaction_token_balance.mint,
-            ui_token_amount: transaction_token_balance.ui_token_amount,
-            owner: transaction_token_balance.owner,
-            program_id: transaction_token_balance.program_id,
-        }
-    }
-}
-
-impl From<&TransactionTokenBalance> for KafkaTransactionTokenBalance {
-    fn from(transaction_token_balance: &TransactionTokenBalance) -> Self {
-        KafkaTransactionTokenBalance {
-            account_index: transaction_token_balance.account_index,
-            mint: transaction_token_balance.mint.clone(),
-            ui_token_amount: transaction_token_balance.ui_token_amount.clone(),
-            owner: transaction_token_balance.owner.clone(),
-            program_id: transaction_token_balance.program_id.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KafkaTransactionStatusMeta {
     pub status: TransactionResult<()>,
     pub fee: u64,
@@ -317,84 +158,40 @@ pub struct KafkaTransactionStatusMeta {
     pub rewards: Option<Rewards>,
     pub loaded_addresses: LoadedAddresses,
     pub return_data: Option<TransactionReturnData>,
+    pub compute_units_consumed: Option<u64>,
 }
 
-impl From<&TransactionStatusMeta> for KafkaTransactionStatusMeta {
-    fn from(transaction_status_meta: &TransactionStatusMeta) -> Self {
-        let pre_token_balances: Option<Vec<KafkaTransactionTokenBalance>> = transaction_status_meta
-            .pre_token_balances
-            .as_ref()
-            .map(|v| {
-                let mut result: Vec<KafkaTransactionTokenBalance> = Vec::new();
-                for i in v {
-                    result.push(i.into())
-                }
-                result
-            });
+/// Information about a transaction, including index in block
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KafkaReplicaTransactionInfoV2 {
+    /// The first signature of the transaction, used for identifying the transaction.
+    pub signature: Signature,
 
-        let post_token_balances: Option<Vec<KafkaTransactionTokenBalance>> =
-            transaction_status_meta
-                .post_token_balances
-                .as_ref()
-                .map(|v| {
-                    let mut result: Vec<KafkaTransactionTokenBalance> = Vec::new();
-                    for i in v {
-                        result.push(i.into())
-                    }
-                    result
-                });
+    /// Indicates if the transaction is a simple vote transaction.
+    pub is_vote: bool,
 
-        KafkaTransactionStatusMeta {
-            status: transaction_status_meta.status.clone(),
-            fee: transaction_status_meta.fee,
-            pre_balances: transaction_status_meta.pre_balances.clone(),
-            post_balances: transaction_status_meta.post_balances.clone(),
-            inner_instructions: transaction_status_meta.inner_instructions.clone(),
-            log_messages: transaction_status_meta.log_messages.clone(),
-            pre_token_balances,
-            post_token_balances,
-            rewards: transaction_status_meta.rewards.clone(),
-            loaded_addresses: transaction_status_meta.loaded_addresses.clone(),
-            return_data: transaction_status_meta.return_data.clone(),
-        }
-    }
+    /// The sanitized transaction.
+    pub transaction: KafkaSanitizedTransaction,
+
+    /// Metadata of the transaction status.
+    pub transaction_status_meta: KafkaTransactionStatusMeta,
+
+    /// The transaction's index in the block
+    pub index: usize,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// A wrapper to future-proof ReplicaTransactionInfo handling.
+/// If there were a change to the structure of ReplicaTransactionInfo,
+/// there would be new enum entry for the newer version, forcing
+/// plugin implementations to handle the change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum KafkaReplicaAccountInfoVersions {
-    V0_0_1(KafkaReplicaAccountInfo),
-    V0_0_2(KafkaReplicaAccountInfoV2),
+pub enum KafkaReplicaTransactionInfoVersions {
+    V0_0_1(KafkaReplicaTransactionInfo),
+    V0_0_2(KafkaReplicaTransactionInfoV2),
 }
 
-impl From<ReplicaAccountInfoVersions<'_>> for KafkaReplicaAccountInfoVersions {
-    fn from(account_info: ReplicaAccountInfoVersions) -> Self {
-        match account_info {
-            ReplicaAccountInfoVersions::V0_0_1(a) => {
-                KafkaReplicaAccountInfoVersions::V0_0_1(a.into())
-            }
-            ReplicaAccountInfoVersions::V0_0_2(a) => {
-                KafkaReplicaAccountInfoVersions::V0_0_2(a.into())
-            }
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum KafkaReplicaBlockInfoVersions {
-    V0_0_1(KafkaReplicaBlockInfo),
-}
-
-impl From<ReplicaBlockInfoVersions<'_>> for KafkaReplicaBlockInfoVersions {
-    fn from(replica_block_info: ReplicaBlockInfoVersions) -> Self {
-        match replica_block_info {
-            ReplicaBlockInfoVersions::V0_0_1(r) => KafkaReplicaBlockInfoVersions::V0_0_1(r.into()),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KafkaReplicaBlockInfo {
     pub slot: u64,
     pub blockhash: String,
@@ -403,19 +200,28 @@ pub struct KafkaReplicaBlockInfo {
     pub block_height: Option<u64>,
 }
 
-impl From<&ReplicaBlockInfo<'_>> for KafkaReplicaBlockInfo {
-    fn from(replica_block_info: &ReplicaBlockInfo) -> Self {
-        KafkaReplicaBlockInfo {
-            slot: replica_block_info.slot,
-            blockhash: replica_block_info.blockhash.to_string(),
-            rewards: replica_block_info.rewards.to_vec(),
-            block_time: replica_block_info.block_time,
-            block_height: replica_block_info.block_height,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum KafkaReplicaBlockInfoVersions {
+    V0_0_1(KafkaReplicaBlockInfo),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NotifyTransaction {
+    #[serde(flatten)]
+    pub transaction_info: KafkaReplicaTransactionInfoVersions,
+    pub slot: u64,
+    pub retrieved_time: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotifyBlockMetaData {
+    #[serde(flatten)]
+    pub block_info: KafkaReplicaBlockInfoVersions,
+    pub retrieved_time: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateAccount {
     #[serde(flatten)]
     pub account: KafkaReplicaAccountInfoVersions,
@@ -424,15 +230,6 @@ pub struct UpdateAccount {
     pub retrieved_time: NaiveDateTime,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UpdateSlotStatus {
-    pub slot: u64,
-    pub parent: Option<u64>,
-    pub status: KafkaSlotStatus,
-    pub retrieved_time: NaiveDateTime,
-}
-
-/// The current status of a slot
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KafkaSlotStatus {
     /// The highest slot of the heaviest fork processed by the node. Ledger state at this slot is
@@ -447,37 +244,10 @@ pub enum KafkaSlotStatus {
     Confirmed,
 }
 
-impl fmt::Display for KafkaSlotStatus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            KafkaSlotStatus::Processed => write!(f, "Processed"),
-            KafkaSlotStatus::Rooted => write!(f, "Rooted"),
-            KafkaSlotStatus::Confirmed => write!(f, "Confirmed"),
-        }
-    }
-}
-
-impl From<SlotStatus> for KafkaSlotStatus {
-    fn from(slot_status: SlotStatus) -> Self {
-        match slot_status {
-            SlotStatus::Processed => KafkaSlotStatus::Processed,
-            SlotStatus::Rooted => KafkaSlotStatus::Rooted,
-            SlotStatus::Confirmed => KafkaSlotStatus::Confirmed,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct NotifyTransaction {
-    #[serde(flatten)]
-    pub transaction_info: KafkaReplicaTransactionInfoVersions,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateSlotStatus {
     pub slot: u64,
-    pub retrieved_time: NaiveDateTime,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NotifyBlockMetaData {
-    #[serde(flatten)]
-    pub block_info: KafkaReplicaBlockInfoVersions,
+    pub parent: Option<u64>,
+    pub status: KafkaSlotStatus,
     pub retrieved_time: NaiveDateTime,
 }
