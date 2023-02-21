@@ -1,8 +1,7 @@
-use std::fmt;
-
 use crate::kafka_structs::{
     NotifyBlockMetaData, NotifyTransaction, UpdateAccount, UpdateSlotStatus,
 };
+use std::fmt;
 
 pub enum MessageType {
     UpdateAccount,
@@ -47,5 +46,40 @@ impl GetMessageType for UpdateAccount {
 impl GetMessageType for UpdateSlotStatus {
     fn get_type(&self) -> MessageType {
         MessageType::UpdateSlot
+    }
+}
+
+pub enum EventType<'a> {
+    NotifyBlockMetaData(&'a NotifyBlockMetaData),
+    NotifyTransaction(&'a NotifyTransaction),
+    UpdateAccount(&'a UpdateAccount),
+    UpdateSlotStatus(&'a UpdateSlotStatus),
+}
+
+pub trait GetEvent: Sized {
+    fn as_ref(&self) -> EventType;
+}
+
+impl GetEvent for NotifyTransaction {
+    fn as_ref(&self) -> EventType {
+        EventType::NotifyTransaction(self)
+    }
+}
+
+impl GetEvent for NotifyBlockMetaData {
+    fn as_ref(&self) -> EventType {
+        EventType::NotifyBlockMetaData(self)
+    }
+}
+
+impl GetEvent for UpdateAccount {
+    fn as_ref(&self) -> EventType {
+        EventType::UpdateAccount(self)
+    }
+}
+
+impl GetEvent for UpdateSlotStatus {
+    fn as_ref(&self) -> EventType {
+        EventType::UpdateSlotStatus(self)
     }
 }
