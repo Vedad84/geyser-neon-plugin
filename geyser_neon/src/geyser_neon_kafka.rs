@@ -7,9 +7,8 @@ use std::{
 use chrono::Utc;
 use flume::Sender;
 use kafka_common::kafka_structs::{
-    KafkaReplicaAccountInfoVersions, KafkaReplicaBlockInfoVersions,
-    KafkaReplicaTransactionInfoVersions, KafkaSlotStatus, NotifyBlockMetaData, NotifyTransaction,
-    UpdateAccount, UpdateSlotStatus,
+    KafkaReplicaAccountInfoVersions, KafkaReplicaTransactionInfoVersions, NotifyBlockMetaData,
+    NotifyTransaction, UpdateAccount, UpdateSlotStatus,
 };
 use rdkafka::config::RDKafkaLogLevel;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
@@ -45,7 +44,7 @@ use crate::filter_config_hot_reload::async_watch;
 use crate::{
     build_info::get_build_info,
     geyser_neon_config::{GeyserPluginKafkaConfig, DEFAULT_QUEUE_CAPACITY},
-    kafka_producer_stats::ContextWithStats,
+    kafka_producer_stats::{ContextWithStats, Stats},
     prometheus::start_prometheus,
     receivers::{
         notify_block_loop, notify_transaction_loop, update_account_loop, update_slot_status_loop,
@@ -78,6 +77,7 @@ pub struct GeyserPluginKafka {
     runtime: Arc<Runtime>,
     config: Arc<GeyserPluginKafkaConfig>,
     filter_config: Arc<RwLock<FilterConfig>>,
+    stats: Arc<Stats>,
     logger: &'static Logger,
     account_tx: Option<Sender<UpdateAccount>>,
     slot_status_tx: Option<Sender<UpdateSlotStatus>>,
@@ -121,6 +121,7 @@ impl GeyserPluginKafka {
             runtime,
             config: Arc::new(GeyserPluginKafkaConfig::default()),
             filter_config: Arc::new(RwLock::new(FilterConfig::default())),
+            stats: Arc::new(Stats::default()),
             logger,
             account_tx: None,
             slot_status_tx: None,
@@ -160,6 +161,8 @@ impl GeyserPluginKafka {
         info!("{}", get_build_info());
 
         let ctx_stats = ContextWithStats::default();
+
+        self.stats = ctx_stats.stats.clone();
 
         let prometheus_port = config
             .prometheus_port
@@ -345,25 +348,27 @@ impl GeyserPlugin for GeyserPluginKafka {
         is_startup: bool,
     ) -> Result<()> {
         if process_account_info(self.runtime.clone(), self.filter_config.clone(), &account) {
-            let account: KafkaReplicaAccountInfoVersions = account.into();
-            let retrieved_time = Utc::now().naive_utc();
             let update_account = UpdateAccount {
-                account,
+                account: KafkaReplicaAccountInfoVersions::from(account),
                 slot,
                 is_startup,
-                retrieved_time,
+                retrieved_time: Utc::now().naive_utc(),
             };
 
-            match self
-                .account_tx
+            self.account_tx
                 .as_ref()
                 .expect("Channel for UpdateAccount was not created!")
                 .send(update_account)
-            {
-                Ok(_) => (),
-                Err(e) => error!("Failed to send UpdateAccount, error: {e}"),
-            }
+                .map_err(|e| {
+                    error!("Failed to send UpdateAccount, error: {}", e);
+                    GeyserPluginError::AccountsUpdateError {
+                        msg: format!("Failed to send UpdateAccount, error: {}", e),
+                    }
+                })?;
+        } else {
+            self.stats.filtered_events.inc();
         }
+
         Ok(())
     }
 
@@ -373,25 +378,23 @@ impl GeyserPlugin for GeyserPluginKafka {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<()> {
-        let status: KafkaSlotStatus = status.into();
-        let retrieved_time = Utc::now().naive_utc();
-
-        let update_account = UpdateSlotStatus {
+        let update_slot_status = UpdateSlotStatus {
             slot,
             parent,
-            status,
-            retrieved_time,
+            status: status.into(),
+            retrieved_time: Utc::now().naive_utc(),
         };
 
-        match self
-            .slot_status_tx
+        self.slot_status_tx
             .as_ref()
             .expect("Channel for UpdateSlotStatus was not created!")
-            .send(update_account)
-        {
-            Ok(_) => (),
-            Err(e) => error!("Failed to send UpdateSlotStatus, error: {e}"),
-        }
+            .send(update_slot_status)
+            .map_err(|e| {
+                error!("Failed to send UpdateSlotStatus, error: {}", e);
+                GeyserPluginError::SlotStatusUpdateError {
+                    msg: format!("Failed to send UpdateSlotStatus, error: {}", e),
+                }
+            })?;
 
         Ok(())
     }
@@ -412,45 +415,42 @@ impl GeyserPlugin for GeyserPluginKafka {
             self.filter_config.clone(),
             &transaction_info,
         ) {
-            let transaction_info: KafkaReplicaTransactionInfoVersions = transaction_info.into();
-            let retrieved_time = Utc::now().naive_utc();
             let notify_transaction = NotifyTransaction {
-                transaction_info,
+                transaction_info: KafkaReplicaTransactionInfoVersions::from(transaction_info),
                 slot,
-                retrieved_time,
+                retrieved_time: Utc::now().naive_utc(),
             };
 
-            match self
-                .transaction_tx
+            self.transaction_tx
                 .as_ref()
                 .expect("Channel for NotifyTransaction was not created!")
                 .send(notify_transaction)
-            {
-                Ok(_) => (),
-                Err(e) => error!("Failed to send NotifyTransaction, error: {e}"),
-            }
+                .map_err(|e| {
+                    error!("Failed to send UpdateAccount, error: {}", e);
+                    GeyserPluginError::TransactionUpdateError {
+                        msg: format!("Failed to send NotifyTransaction, error: {}", e),
+                    }
+                })?;
+        } else {
+            self.stats.filtered_events.inc();
         }
 
         Ok(())
     }
 
     fn notify_block_metadata(&mut self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
-        let block_info: KafkaReplicaBlockInfoVersions = block_info.into();
-        let retrieved_time = Utc::now().naive_utc();
-
         let notify_block = NotifyBlockMetaData {
-            block_info,
-            retrieved_time,
+            block_info: block_info.into(),
+            retrieved_time: Utc::now().naive_utc(),
         };
 
-        match self
+        if let Err(e) = self
             .block_metadata_tx
             .as_ref()
             .expect("Channel for NotifyBlockMetaData was not created!")
             .send(notify_block)
         {
-            Ok(_) => (),
-            Err(e) => error!("Failed to send NotifyBlockMetaData, error: {e}"),
+            error!("Failed to send NotifyBlockMetaData, error: {}", e);
         }
 
         Ok(())
