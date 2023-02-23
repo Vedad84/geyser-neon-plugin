@@ -20,6 +20,12 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     let mut registry = <Registry>::default();
 
     registry.register(
+        "filtered_events",
+        "How many events were skipped by filter",
+        stats.filtered_events.clone(),
+    );
+
+    registry.register(
         "kafka_bytes_sent",
         "How many bytes were sent to Kafka cluster",
         stats.kafka_bytes_tx.clone(),
