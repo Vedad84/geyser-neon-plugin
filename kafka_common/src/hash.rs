@@ -7,11 +7,12 @@ impl UpdateAccount {
         match &self.account {
             crate::kafka_structs::KafkaReplicaAccountInfoVersions::V0_0_1(account_info) => {
                 hasher.update(account_info.pubkey.as_slice());
-                hasher.update(&account_info.write_version.to_le_bytes());
+                hasher.update(&self.slot.to_le_bytes());
             }
             crate::kafka_structs::KafkaReplicaAccountInfoVersions::V0_0_2(account_info) => {
                 hasher.update(account_info.pubkey.as_slice());
-                hasher.update(&account_info.write_version.to_le_bytes());
+                hasher.update(account_info.txn_signature.unwrap_or_default().as_ref());
+                hasher.update(&self.slot.to_le_bytes());
             }
         }
 
