@@ -26,6 +26,7 @@ An example configuration file looks like the following:
     "update_slot_topic": "update_slot",
     "notify_transaction_topic": "notify_transaction",
     "notify_block_topic": "notify_block",
+    "ignore_snapshot", false,
     "producer_send_max_retries": "100",
     "producer_queue_max_messages": "20000",
     "producer_message_max_bytes": "104857600",

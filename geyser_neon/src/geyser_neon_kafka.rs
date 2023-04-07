@@ -347,18 +347,18 @@ impl GeyserPlugin for GeyserPluginKafka {
         slot: u64,
         is_startup: bool,
     ) -> Result<()> {
-        if process_account_info(self.runtime.clone(), self.filter_config.clone(), &account) {
-            let update_account = UpdateAccount {
-                account: KafkaReplicaAccountInfoVersions::from(account),
-                slot,
-                is_startup,
-                retrieved_time: Utc::now().naive_utc(),
-            };
-
+        if !(self.config.ignore_snapshot && is_startup)
+            && process_account_info(self.runtime.clone(), self.filter_config.clone(), &account)
+        {
             self.account_tx
                 .as_ref()
                 .expect("Channel for UpdateAccount was not created!")
-                .send(update_account)
+                .send(UpdateAccount {
+                    account: KafkaReplicaAccountInfoVersions::from(account),
+                    slot,
+                    is_startup,
+                    retrieved_time: Utc::now().naive_utc(),
+                })
                 .map_err(|e| {
                     error!("Failed to send UpdateAccount, error: {}", e);
                     GeyserPluginError::AccountsUpdateError {
