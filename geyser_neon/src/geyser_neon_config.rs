@@ -96,6 +96,7 @@ pub struct GeyserPluginKafkaConfig {
     pub update_slot_topic: String,
     pub notify_transaction_topic: String,
     pub notify_block_topic: String,
+    pub ignore_snapshot: bool,
     // From 0 to 2147483647 (i32::MAX),
     pub producer_send_max_retries: String,
     pub producer_queue_max_messages: String,
