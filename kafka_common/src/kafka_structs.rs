@@ -66,7 +66,7 @@ pub struct KafkaReplicaAccountInfoV2 {
     /// account is updated in the same slot multiple times, the update
     /// with higher write_version should supersede the one with lower
     /// write_version.
-    pub write_version: u64,
+    pub write_version: i64,
 
     /// First signature of the transaction caused this account modification
     pub txn_signature: Option<Signature>,

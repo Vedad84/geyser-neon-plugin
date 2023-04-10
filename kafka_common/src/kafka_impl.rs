@@ -14,7 +14,7 @@ use crate::kafka_structs::{
     KafkaReplicaAccountInfoVersions, KafkaReplicaBlockInfo, KafkaReplicaBlockInfoVersions,
     KafkaReplicaTransactionInfo, KafkaReplicaTransactionInfoV2,
     KafkaReplicaTransactionInfoVersions, KafkaSanitizedMessage, KafkaSanitizedTransaction,
-    KafkaSlotStatus, KafkaTransactionStatusMeta, KafkaTransactionTokenBalance,
+    KafkaSlotStatus, KafkaTransactionStatusMeta, KafkaTransactionTokenBalance, UpdateAccount,
 };
 
 impl fmt::Display for KafkaSlotStatus {
@@ -124,6 +124,17 @@ impl From<&ReplicaTransactionInfoV2<'_>> for KafkaReplicaTransactionInfoV2 {
     }
 }
 
+impl UpdateAccount {
+    pub fn set_write_version(&mut self, transaction_index: i64) {
+        let mut account = match &mut self.account {
+            KafkaReplicaAccountInfoVersions::V0_0_1(_) => unreachable!(),
+            KafkaReplicaAccountInfoVersions::V0_0_2(account) => account,
+        };
+
+        account.write_version = transaction_index;
+    }
+}
+
 impl From<ReplicaTransactionInfoVersions<'_>> for KafkaReplicaTransactionInfoVersions {
     fn from(replica_transaction_info: ReplicaTransactionInfoVersions<'_>) -> Self {
         match replica_transaction_info {
@@ -153,6 +164,11 @@ impl From<&ReplicaAccountInfo<'_>> for KafkaReplicaAccountInfo {
 
 impl From<&ReplicaAccountInfoV2<'_>> for KafkaReplicaAccountInfoV2 {
     fn from(replica_account_info: &ReplicaAccountInfoV2<'_>) -> Self {
+        let write_version = if replica_account_info.txn_signature.is_none() {
+            -1
+        } else {
+            0
+        };
         KafkaReplicaAccountInfoV2 {
             owner: replica_account_info.owner.to_vec(),
             lamports: replica_account_info.lamports,
@@ -160,7 +176,7 @@ impl From<&ReplicaAccountInfoV2<'_>> for KafkaReplicaAccountInfoV2 {
             rent_epoch: replica_account_info.rent_epoch,
             data: replica_account_info.data.to_vec(),
             pubkey: replica_account_info.pubkey.to_vec(),
-            write_version: replica_account_info.write_version,
+            write_version,
             txn_signature: replica_account_info.txn_signature.copied(),
         }
     }
