@@ -1,10 +1,5 @@
-use std::{
-    fs::File,
-    io::Read,
-    sync::{atomic::AtomicBool, Arc},
-};
-
 use chrono::Utc;
+use dashmap::DashMap;
 use flume::Sender;
 use kafka_common::kafka_structs::{
     KafkaReplicaAccountInfoVersions, KafkaReplicaTransactionInfoVersions, NotifyBlockMetaData,
@@ -12,6 +7,13 @@ use kafka_common::kafka_structs::{
 };
 use rdkafka::config::RDKafkaLogLevel;
 use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
+use solana_sdk::signature::Signature;
+use std::hash::Hash;
+use std::{
+    fs::File,
+    io::Read,
+    sync::{atomic::AtomicBool, Arc},
+};
 use tokio::{
     runtime::{self, Runtime},
     sync::RwLock,
@@ -26,13 +28,14 @@ use {
     },
 };
 
+use ahash::AHasher;
 use fast_log::{
     consts::LogSize,
     plugin::{file_split::RollingType, packer::LogPacker},
     Config, Logger,
 };
-
 use flume::Receiver;
+use std::hash::BuildHasherDefault;
 
 #[cfg(feature = "filter")]
 use crate::filter::{process_account_info, process_transaction_info};
@@ -73,6 +76,21 @@ fn process_transaction_info(
 #[derive(Default, Debug)]
 struct FilterConfig {}
 
+#[derive(Hash, Eq, PartialEq, Debug)]
+struct AccountOrderingKey {
+    pub slot: u64,
+    pub txn_signature: Signature,
+}
+
+impl AccountOrderingKey {
+    pub fn new(slot: u64, txn_signature: Signature) -> Self {
+        Self {
+            slot,
+            txn_signature,
+        }
+    }
+}
+
 pub struct GeyserPluginKafka {
     runtime: Arc<Runtime>,
     config: Arc<GeyserPluginKafkaConfig>,
@@ -89,6 +107,7 @@ pub struct GeyserPluginKafka {
     update_slot_status_jhandle: Option<JoinHandle<()>>,
     notify_transaction_jhandle: Option<JoinHandle<()>>,
     notify_block_jhandle: Option<JoinHandle<()>>,
+    account_ordering: DashMap<AccountOrderingKey, Vec<UpdateAccount>, BuildHasherDefault<AHasher>>,
     _cfg_watcher_jhandle: Option<JoinHandle<anyhow::Result<()>>>,
 }
 
@@ -117,6 +136,14 @@ impl GeyserPluginKafka {
 
         let should_stop = Arc::new(AtomicBool::new(false));
 
+        let hasher_builder = BuildHasherDefault::<AHasher>::default();
+
+        let transaction_ordering: DashMap<
+            AccountOrderingKey,
+            Vec<UpdateAccount>,
+            BuildHasherDefault<AHasher>,
+        > = DashMap::with_capacity_and_hasher(256, hasher_builder);
+
         Self {
             runtime,
             config: Arc::new(GeyserPluginKafkaConfig::default()),
@@ -133,6 +160,7 @@ impl GeyserPluginKafka {
             notify_transaction_jhandle: None,
             notify_block_jhandle: None,
             prometheus_jhandle: None,
+            account_ordering: transaction_ordering,
             _cfg_watcher_jhandle: None,
         }
     }
@@ -350,21 +378,37 @@ impl GeyserPlugin for GeyserPluginKafka {
         if !(self.config.ignore_snapshot && is_startup)
             && process_account_info(self.runtime.clone(), self.filter_config.clone(), &account)
         {
-            self.account_tx
-                .as_ref()
-                .expect("Channel for UpdateAccount was not created!")
-                .send(UpdateAccount {
-                    account: KafkaReplicaAccountInfoVersions::from(account),
-                    slot,
-                    is_startup,
-                    retrieved_time: Utc::now().naive_utc(),
-                })
-                .map_err(|e| {
-                    error!("Failed to send UpdateAccount, error: {}", e);
-                    GeyserPluginError::AccountsUpdateError {
-                        msg: format!("Failed to send UpdateAccount, error: {}", e),
-                    }
-                })?;
+            let account_v2 = match account {
+                ReplicaAccountInfoVersions::V0_0_1(_) => unreachable!(),
+                ReplicaAccountInfoVersions::V0_0_2(a) => a,
+            };
+
+            let update_account = UpdateAccount {
+                account: KafkaReplicaAccountInfoVersions::from(account),
+                slot,
+                is_startup,
+                retrieved_time: Utc::now().naive_utc(),
+            };
+
+            if let Some(signature) = account_v2.txn_signature {
+                let account_key = AccountOrderingKey::new(slot, *signature);
+                self.account_ordering
+                    .entry(account_key)
+                    .or_insert_with(Vec::new)
+                    .push(update_account);
+                self.stats.ordering_queue.inc();
+            } else {
+                self.account_tx
+                    .as_ref()
+                    .expect("Channel for UpdateAccount was not created!")
+                    .send(update_account)
+                    .map_err(|e| {
+                        error!("Failed to send UpdateAccount, error: {}", e);
+                        GeyserPluginError::AccountsUpdateError {
+                            msg: format!("Failed to send UpdateAccount, error: {}", e),
+                        }
+                    })?;
+            }
         } else {
             self.stats.filtered_events.inc();
         }
@@ -415,6 +459,27 @@ impl GeyserPlugin for GeyserPluginKafka {
             self.filter_config.clone(),
             &transaction_info,
         ) {
+            let transaction_info_v2 = match transaction_info {
+                ReplicaTransactionInfoVersions::V0_0_1(_) => unreachable!(),
+                ReplicaTransactionInfoVersions::V0_0_2(info) => info,
+            };
+
+            let key = AccountOrderingKey::new(slot, *transaction_info_v2.signature);
+
+            if let Some((_, update_account_vec)) = self.account_ordering.remove(&key) {
+                for mut acc in update_account_vec.into_iter() {
+                    acc.set_write_version(transaction_info_v2.index as i64);
+                    self.account_tx
+                        .as_ref()
+                        .expect("Channel for UpdateAccount was not created!")
+                        .send(acc)
+                        .map_err(|e| GeyserPluginError::AccountsUpdateError {
+                            msg: format!("Failed to send UpdateAccount, error: {}", e),
+                        })?;
+                    self.stats.ordering_queue.dec();
+                }
+            }
+
             let notify_transaction = NotifyTransaction {
                 transaction_info: KafkaReplicaTransactionInfoVersions::from(transaction_info),
                 slot,
@@ -425,11 +490,8 @@ impl GeyserPlugin for GeyserPluginKafka {
                 .as_ref()
                 .expect("Channel for NotifyTransaction was not created!")
                 .send(notify_transaction)
-                .map_err(|e| {
-                    error!("Failed to send UpdateAccount, error: {}", e);
-                    GeyserPluginError::TransactionUpdateError {
-                        msg: format!("Failed to send NotifyTransaction, error: {}", e),
-                    }
+                .map_err(|e| GeyserPluginError::TransactionUpdateError {
+                    msg: format!("Failed to send NotifyTransaction, error: {}", e),
                 })?;
         } else {
             self.stats.filtered_events.inc();

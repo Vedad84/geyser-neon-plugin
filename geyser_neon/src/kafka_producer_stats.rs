@@ -1,11 +1,13 @@
 use log::info;
 use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::gauge::Gauge;
 use rdkafka::{ClientContext, Statistics};
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Stats {
+    pub ordering_queue: Gauge<f64, AtomicU64>,
     pub filtered_events: Counter<u64, AtomicU64>,
     pub kafka_update_account: Counter<u64, AtomicU64>,
     pub kafka_update_slot: Counter<u64, AtomicU64>,

@@ -20,6 +20,12 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     let mut registry = <Registry>::default();
 
     registry.register(
+        "ordering_queue_size",
+        "How many account are pending in ordering queue",
+        stats.ordering_queue.clone(),
+    );
+
+    registry.register(
         "filtered_events",
         "How many events were skipped by filter",
         stats.filtered_events.clone(),

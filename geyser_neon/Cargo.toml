@@ -31,6 +31,7 @@ build-info = { version = "0.0.30" }
 prometheus-client = "0.20.0"
 hyper = { version = "0.14.25", features = ["server", "http1", "tcp"] }
 ahash = { version = "0.8.3", features = ["serde"] }
+dashmap = "5.4.0"
 anyhow = "1.0.70"
 
 [dependencies.notify]
