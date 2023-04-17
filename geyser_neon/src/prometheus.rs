@@ -20,25 +20,25 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     let mut registry = <Registry>::default();
 
     registry.register(
-        "ordering_queue_size",
+        "neon_plugin_ordering_queue_size",
         "How many account are pending in ordering queue",
         stats.ordering_queue.clone(),
     );
 
     registry.register(
-        "filtered_events",
+        "neon_plugin_filtered_events",
         "How many events were skipped by filter",
         stats.filtered_events.clone(),
     );
 
     registry.register(
-        "kafka_bytes_sent",
+        "neon_plugin_kafka_bytes_sent",
         "How many bytes were sent to Kafka cluster",
         stats.kafka_bytes_tx.clone(),
     );
 
     registry.register(
-        "kafka_errors_serialize",
+        "neon_plugin_kafka_errors_serialize",
         "How many messages have not been serialized",
         stats.kafka_errors_serialize.clone(),
     );
@@ -49,7 +49,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_sent",
+        "neon_plugin_kafka_messages_sent",
         "How many UpdateAccount messages have been sent",
         stats.kafka_update_account.clone(),
     );
@@ -60,7 +60,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_sent",
+        "neon_plugin_kafka_messages_sent",
         "How many UpdateSlot messages have been sent",
         stats.kafka_update_slot.clone(),
     );
@@ -71,7 +71,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_sent",
+        "neon_plugin_kafka_messages_sent",
         "How many NotifyTransaction messages have been sent",
         stats.kafka_notify_transaction.clone(),
     );
@@ -82,7 +82,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_sent",
+        "neon_plugin_kafka_messages_sent",
         "How many NotifyBlock messages have been sent",
         stats.kafka_notify_block.clone(),
     );
@@ -93,7 +93,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_unsent",
+        "neon_plugin_kafka_messages_unsent",
         "How many UpdateAccount messages have not been sent",
         stats.kafka_errors_update_account.clone(),
     );
@@ -104,7 +104,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_unsent",
+        "neon_plugin_kafka_messages_unsent",
         "How many UpdateSlot messages have not been sent",
         stats.kafka_errors_update_slot.clone(),
     );
@@ -115,7 +115,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_unsent",
+        "neon_plugin_kafka_messages_unsent",
         "How many NotifyTransaction messages have not been sent",
         stats.kafka_errors_notify_transaction.clone(),
     );
@@ -126,7 +126,7 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     ));
 
     registry_with_label.register(
-        "kafka_messages_unsent",
+        "neon_plugin_kafka_messages_unsent",
         "How many NotifyBlock messages have not been sent",
         stats.kafka_errors_notify_block.clone(),
     );
