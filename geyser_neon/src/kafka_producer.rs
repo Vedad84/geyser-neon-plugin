@@ -45,6 +45,7 @@ impl KafkaProducer {
             .set("message.max.bytes", &config.producer_message_max_bytes)
             .set("request.timeout.ms", &config.producer_request_timeout_ms)
             .set("retry.backoff.ms", &config.producer_retry_backoff_ms)
+            .set("enable.idempotence", &config.producer_enable_idempotence)
             .set(
                 "max.in.flight.requests.per.connection",
                 &config.max_in_flight_requests_per_connection,
