@@ -108,6 +108,10 @@ pub struct GeyserPluginKafka {
     notify_transaction_jhandle: Option<JoinHandle<()>>,
     notify_block_jhandle: Option<JoinHandle<()>>,
     account_ordering: DashMap<AccountOrderingKey, Vec<UpdateAccount>, BuildHasherDefault<AHasher>>,
+    last_ua_slot: u64,
+    last_nt_slot: u64,
+    ua_counter: u64,
+    nt_counter: u64,
     _cfg_watcher_jhandle: Option<JoinHandle<anyhow::Result<()>>>,
 }
 
@@ -162,6 +166,10 @@ impl GeyserPluginKafka {
             prometheus_jhandle: None,
             account_ordering: transaction_ordering,
             _cfg_watcher_jhandle: None,
+            last_ua_slot: 0,
+            last_nt_slot: 0,
+            ua_counter: 0,
+            nt_counter: 0,
         }
     }
 
@@ -378,6 +386,17 @@ impl GeyserPlugin for GeyserPluginKafka {
         if !(self.config.ignore_snapshot && is_startup)
             && process_account_info(self.runtime.clone(), self.filter_config.clone(), &account)
         {
+            if self.last_ua_slot != slot {
+                info!(
+                    "Processed {} update account events for the slot {}",
+                    self.ua_counter, self.last_ua_slot
+                );
+                self.last_ua_slot = slot;
+                self.ua_counter = 1;
+            } else {
+                self.ua_counter += 1;
+            }
+
             let account_v2 = match account {
                 ReplicaAccountInfoVersions::V0_0_1(_) => unreachable!(),
                 ReplicaAccountInfoVersions::V0_0_2(a) => a,
@@ -459,6 +478,17 @@ impl GeyserPlugin for GeyserPluginKafka {
             self.filter_config.clone(),
             &transaction_info,
         ) {
+            if self.last_nt_slot != slot {
+                info!(
+                    "Processed {} notify transaction events for the slot {}",
+                    self.nt_counter, self.last_nt_slot
+                );
+                self.last_nt_slot = slot;
+                self.nt_counter = 1;
+            } else {
+                self.nt_counter += 1;
+            }
+
             let transaction_info_v2 = match transaction_info {
                 ReplicaTransactionInfoVersions::V0_0_1(_) => unreachable!(),
                 ReplicaTransactionInfoVersions::V0_0_2(info) => info,

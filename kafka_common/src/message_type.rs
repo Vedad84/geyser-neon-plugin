@@ -23,11 +23,18 @@ impl fmt::Display for MessageType {
 
 pub trait GetMessageType {
     fn get_type(&self) -> MessageType;
+    fn get_slot(&self) -> u64;
 }
 
 impl GetMessageType for NotifyBlockMetaData {
     fn get_type(&self) -> MessageType {
         MessageType::NotifyBlock
+    }
+
+    fn get_slot(&self) -> u64 {
+        match &self.block_info {
+            crate::kafka_structs::KafkaReplicaBlockInfoVersions::V0_0_1(rbi) => rbi.slot,
+        }
     }
 }
 
@@ -35,17 +42,29 @@ impl GetMessageType for NotifyTransaction {
     fn get_type(&self) -> MessageType {
         MessageType::NotifyTransaction
     }
+
+    fn get_slot(&self) -> u64 {
+        self.slot
+    }
 }
 
 impl GetMessageType for UpdateAccount {
     fn get_type(&self) -> MessageType {
         MessageType::UpdateAccount
     }
+
+    fn get_slot(&self) -> u64 {
+        self.slot
+    }
 }
 
 impl GetMessageType for UpdateSlotStatus {
     fn get_type(&self) -> MessageType {
         MessageType::UpdateSlot
+    }
+
+    fn get_slot(&self) -> u64 {
+        self.slot
     }
 }
 
