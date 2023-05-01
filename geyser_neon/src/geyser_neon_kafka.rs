@@ -415,7 +415,7 @@ impl GeyserPlugin for GeyserPluginKafka {
                     .entry(account_key)
                     .or_insert_with(Vec::new)
                     .push(update_account);
-                self.stats.ordering_queue.inc();
+                self.stats.ordering_queue_len.inc();
             } else {
                 self.account_tx
                     .as_ref()
@@ -441,6 +441,15 @@ impl GeyserPlugin for GeyserPluginKafka {
         parent: Option<u64>,
         status: SlotStatus,
     ) -> Result<()> {
+        let slot_status_tx = self
+            .slot_status_tx
+            .as_ref()
+            .expect("Channel for UpdateSlotStatus was not created!");
+
+        self.stats
+            .update_slot_queue_len
+            .set(slot_status_tx.len() as f64);
+
         let update_slot_status = UpdateSlotStatus {
             slot,
             parent,
@@ -448,16 +457,12 @@ impl GeyserPlugin for GeyserPluginKafka {
             retrieved_time: Utc::now().naive_utc(),
         };
 
-        self.slot_status_tx
-            .as_ref()
-            .expect("Channel for UpdateSlotStatus was not created!")
-            .send(update_slot_status)
-            .map_err(|e| {
-                error!("Failed to send UpdateSlotStatus, error: {}", e);
-                GeyserPluginError::SlotStatusUpdateError {
-                    msg: format!("Failed to send UpdateSlotStatus, error: {}", e),
-                }
-            })?;
+        slot_status_tx.send(update_slot_status).map_err(|e| {
+            error!("Failed to send UpdateSlotStatus, error: {}", e);
+            GeyserPluginError::SlotStatusUpdateError {
+                msg: format!("Failed to send UpdateSlotStatus, error: {}", e),
+            }
+        })?;
 
         Ok(())
     }
@@ -478,6 +483,20 @@ impl GeyserPlugin for GeyserPluginKafka {
             self.filter_config.clone(),
             &transaction_info,
         ) {
+            let account_tx = self
+                .account_tx
+                .as_ref()
+                .expect("Channel for UpdateAccount was not created!");
+
+            let transaction_tx = self
+                .transaction_tx
+                .as_ref()
+                .expect("Channel for NotifyTransaction was not created!");
+
+            self.stats
+                .notify_transaction_queue_len
+                .set(transaction_tx.len() as f64);
+
             if self.last_nt_slot != slot {
                 info!(
                     "Processed {} notify transaction events for the slot {}",
@@ -499,10 +518,8 @@ impl GeyserPlugin for GeyserPluginKafka {
             if let Some((_, update_account_vec)) = self.account_ordering.remove(&key) {
                 for mut acc in update_account_vec.into_iter() {
                     acc.set_write_version(transaction_info_v2.index as i64);
-                    self.stats.ordering_queue.dec();
-                    self.account_tx
-                        .as_ref()
-                        .expect("Channel for UpdateAccount was not created!")
+                    self.stats.ordering_queue_len.dec();
+                    account_tx
                         .send(acc)
                         .map_err(|e| GeyserPluginError::AccountsUpdateError {
                             msg: format!("Failed to send UpdateAccount, error: {}", e),
@@ -516,13 +533,11 @@ impl GeyserPlugin for GeyserPluginKafka {
                 retrieved_time: Utc::now().naive_utc(),
             };
 
-            self.transaction_tx
-                .as_ref()
-                .expect("Channel for NotifyTransaction was not created!")
-                .send(notify_transaction)
-                .map_err(|e| GeyserPluginError::TransactionUpdateError {
+            transaction_tx.send(notify_transaction).map_err(|e| {
+                GeyserPluginError::TransactionUpdateError {
                     msg: format!("Failed to send NotifyTransaction, error: {}", e),
-                })?;
+                }
+            })?;
         } else {
             self.stats.filtered_events.inc();
         }
@@ -531,17 +546,21 @@ impl GeyserPlugin for GeyserPluginKafka {
     }
 
     fn notify_block_metadata(&mut self, block_info: ReplicaBlockInfoVersions) -> Result<()> {
+        let block_metadata_tx = self
+            .block_metadata_tx
+            .as_ref()
+            .expect("Channel for NotifyBlockMetaData was not created!");
+
+        self.stats
+            .notify_block_queue_len
+            .set(block_metadata_tx.len() as f64);
+
         let notify_block = NotifyBlockMetaData {
             block_info: block_info.into(),
             retrieved_time: Utc::now().naive_utc(),
         };
 
-        if let Err(e) = self
-            .block_metadata_tx
-            .as_ref()
-            .expect("Channel for NotifyBlockMetaData was not created!")
-            .send(notify_block)
-        {
+        if let Err(e) = block_metadata_tx.send(notify_block) {
             error!("Failed to send NotifyBlockMetaData, error: {}", e);
         }
 
