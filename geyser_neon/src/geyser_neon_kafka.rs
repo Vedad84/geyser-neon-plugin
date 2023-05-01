@@ -499,6 +499,7 @@ impl GeyserPlugin for GeyserPluginKafka {
             if let Some((_, update_account_vec)) = self.account_ordering.remove(&key) {
                 for mut acc in update_account_vec.into_iter() {
                     acc.set_write_version(transaction_info_v2.index as i64);
+                    self.stats.ordering_queue.dec();
                     self.account_tx
                         .as_ref()
                         .expect("Channel for UpdateAccount was not created!")
@@ -506,7 +507,6 @@ impl GeyserPlugin for GeyserPluginKafka {
                         .map_err(|e| GeyserPluginError::AccountsUpdateError {
                             msg: format!("Failed to send UpdateAccount, error: {}", e),
                         })?;
-                    self.stats.ordering_queue.dec();
                 }
             }
 
