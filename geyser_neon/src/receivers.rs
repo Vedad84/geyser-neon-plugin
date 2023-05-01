@@ -21,6 +21,7 @@ async fn serialize_and_send<T: Serialize + GetMessageType>(
     stats: Arc<Stats>,
 ) {
     let message_type = message.get_type();
+    let slot = message.get_slot();
     let (topic, counter_send_success, counter_send_failed) = match message_type {
         MessageType::UpdateAccount => (
             &config.update_account_topic,
@@ -49,7 +50,7 @@ async fn serialize_and_send<T: Serialize + GetMessageType>(
             if let Err(e) = producer.send(topic, &message, &hash, None).await {
                 counter_send_failed.inc();
                 error!(
-                    "Producer cannot send {message_type} message with size {}, error: {}",
+                    "Producer cannot send {message_type}, slot: {slot}, with size: {}, error: {}",
                     message.len(),
                     e.0
                 );
