@@ -7,7 +7,11 @@ use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Stats {
-    pub ordering_queue: Gauge<f64, AtomicU64>,
+    pub update_account_queue_len: Gauge<f64, AtomicU64>,
+    pub update_slot_queue_len: Gauge<f64, AtomicU64>,
+    pub notify_transaction_queue_len: Gauge<f64, AtomicU64>,
+    pub notify_block_queue_len: Gauge<f64, AtomicU64>,
+    pub ordering_queue_len: Gauge<f64, AtomicU64>,
     pub filtered_events: Counter<u64, AtomicU64>,
     pub kafka_update_account: Counter<u64, AtomicU64>,
     pub kafka_update_slot: Counter<u64, AtomicU64>,

@@ -33,6 +33,7 @@ hyper = { version = "0.14.26", features = ["server", "http1", "tcp"] }
 ahash = { version = "0.8.3", features = ["serde"] }
 dashmap = "5.4.0"
 anyhow = "1.0.70"
+winnow = "=0.4.1"
 
 [dependencies.notify]
 version = "5.1.0"

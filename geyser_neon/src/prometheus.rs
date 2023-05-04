@@ -20,9 +20,33 @@ pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaCo
     let mut registry = <Registry>::default();
 
     registry.register(
-        "neon_plugin_ordering_queue_size",
+        "neon_plugin_update_account_queue_len",
+        "How many events are currently in a account queue",
+        stats.update_account_queue_len.clone(),
+    );
+
+    registry.register(
+        "neon_plugin_update_slot_queue_len",
+        "How many events are currently in a slot queue",
+        stats.update_slot_queue_len.clone(),
+    );
+
+    registry.register(
+        "neon_plugin_notify_transaction_queue_len",
+        "How many events are currently in a transaction queue",
+        stats.notify_transaction_queue_len.clone(),
+    );
+
+    registry.register(
+        "neon_plugin_notify_block_queue_len",
+        "How many events are currently in a block queue",
+        stats.notify_block_queue_len.clone(),
+    );
+
+    registry.register(
+        "neon_plugin_ordering_queue_len",
         "How many account are pending in ordering queue",
-        stats.ordering_queue.clone(),
+        stats.ordering_queue_len.clone(),
     );
 
     registry.register(
