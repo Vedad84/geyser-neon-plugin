@@ -1,10 +1,6 @@
 pub mod build_info;
-#[cfg(feature = "filter")]
+
 mod filter;
-#[cfg(feature = "filter")]
-mod filter_config;
-#[cfg(feature = "filter")]
-mod filter_config_hot_reload;
 
 pub mod geyser_neon_config;
 pub mod geyser_neon_kafka;
