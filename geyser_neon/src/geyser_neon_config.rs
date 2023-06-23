@@ -1,49 +1,9 @@
+use crate::kafka_producer::KafkaProducerConfig;
 use log::LevelFilter;
-use rdkafka::config::RDKafkaLogLevel;
-use serde_derive::{Deserialize, Serialize};
 
-pub(crate) const DEFAULT_QUEUE_CAPACITY: usize = 15_000;
+use serde::Deserialize;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum LogLevel {
-    /// Higher priority then [`Level::Error`](log::Level::Error) from the log
-    /// crate.
-    Emerg = 0,
-    /// Higher priority then [`Level::Error`](log::Level::Error) from the log
-    /// crate.
-    Alert = 1,
-    /// Higher priority then [`Level::Error`](log::Level::Error) from the log
-    /// crate.
-    Critical = 2,
-    /// Equivalent to [`Level::Error`](log::Level::Error) from the log crate.
-    Error = 3,
-    /// Equivalent to [`Level::Warn`](log::Level::Warn) from the log crate.
-    Warning = 4,
-    /// Higher priority then [`Level::Info`](log::Level::Info) from the log
-    /// crate.
-    Notice = 5,
-    /// Equivalent to [`Level::Info`](log::Level::Info) from the log crate.
-    Info = 6,
-    /// Equivalent to [`Level::Debug`](log::Level::Debug) from the log crate.
-    Debug = 7,
-}
-
-impl From<&LogLevel> for RDKafkaLogLevel {
-    fn from(log_level: &LogLevel) -> Self {
-        match log_level {
-            LogLevel::Emerg => RDKafkaLogLevel::Emerg,
-            LogLevel::Alert => RDKafkaLogLevel::Alert,
-            LogLevel::Critical => RDKafkaLogLevel::Critical,
-            LogLevel::Error => RDKafkaLogLevel::Error,
-            LogLevel::Warning => RDKafkaLogLevel::Warning,
-            LogLevel::Notice => RDKafkaLogLevel::Notice,
-            LogLevel::Info => RDKafkaLogLevel::Info,
-            LogLevel::Debug => RDKafkaLogLevel::Debug,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub enum GlobalLogLevel {
     /// A level lower than all log levels.
     Off,
@@ -59,18 +19,6 @@ pub enum GlobalLogLevel {
     Trace,
 }
 
-impl Default for GlobalLogLevel {
-    fn default() -> Self {
-        GlobalLogLevel::Info
-    }
-}
-
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Info
-    }
-}
-
 impl From<&GlobalLogLevel> for LevelFilter {
     fn from(log_level: &GlobalLogLevel) -> Self {
         match log_level {
@@ -84,46 +32,23 @@ impl From<&GlobalLogLevel> for LevelFilter {
     }
 }
 
-#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct GeyserPluginKafkaConfig {
-    // Servers list in kafka format
-    pub brokers_list: String,
-    pub sasl_username: String,
-    pub sasl_password: String,
-    pub sasl_mechanism: String,
-    pub security_protocol: String,
+    pub kafka_producer_config: KafkaProducerConfig,
+
     pub update_account_topic: String,
     pub update_slot_topic: String,
     pub notify_transaction_topic: String,
     pub notify_block_topic: String,
+
     pub ignore_snapshot: bool,
-    // From 0 to 2147483647 (i32::MAX),
-    pub producer_send_max_retries: String,
-    pub producer_queue_max_messages: String,
-    pub producer_message_max_bytes: String,
-    pub producer_request_timeout_ms: String,
-    pub producer_retry_backoff_ms: String,
-    pub producer_enable_idempotence: String,
-    pub max_in_flight_requests_per_connection: String,
-    pub update_account_queue_capacity: String,
-    pub update_slot_queue_capacity: String,
-    pub notify_transaction_queue_capacity: String,
-    pub notify_block_queue_capacity: String,
-    pub compression_codec: String,
-    pub compression_level: String,
-    pub batch_size: String,
-    pub batch_num_messages: String,
-    pub linger_ms: String,
-    pub acks: String,
-    pub statistics_interval_ms: String,
-    pub prometheus_port: String,
-    // This value is only enforced locally and limits the time a produced message waits for successful delivery.
-    // A time of 0 is infinite.
-    // This is the maximum time librdkafka may use to deliver a message (including retries)
-    // From 0 to 2147483647 (i32::MAX)
-    pub message_timeout_ms: String,
-    pub kafka_log_level: LogLevel,
+    pub prometheus_port: u16,
     pub global_log_level: GlobalLogLevel,
     #[cfg(feature = "filter")]
     pub filter_config_path: String,
+    pub log_path: String,
+}
+
+pub fn read_config(path: &str) -> anyhow::Result<GeyserPluginKafkaConfig> {
+    Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
 }

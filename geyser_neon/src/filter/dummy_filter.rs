@@ -4,7 +4,6 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::{
     ReplicaAccountInfoVersions, ReplicaTransactionInfoVersions,
 };
 
-#[derive(Default)]
 pub struct DummyFilter;
 
 impl FilterFactory for DummyFilter {

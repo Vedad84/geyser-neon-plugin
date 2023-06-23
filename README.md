@@ -14,19 +14,15 @@ In order to configure an SSL certificate, see the [librdkafka documentation](htt
 Path to the log file is **/var/log/neon/geyser.log**
 \
 An example configuration file looks like the following:
-```
+```json
 {
-    "libpath": "/home/user/libgeyser_neon.so",
+  "libpath": "/home/user/libgeyser_neon.so",
+  "kafka_producer_config": {
     "brokers_list": "167.235.75.213:9092,159.69.197.26:9092,167.235.151.85:9092",
     "sasl_username": "username",
     "sasl_password": "password",
     "sasl_mechanism": "SCRAM-SHA-512",
     "security_protocol": "SASL_SSL",
-    "update_account_topic": "update_account",
-    "update_slot_topic": "update_slot",
-    "notify_transaction_topic": "notify_transaction",
-    "notify_block_topic": "notify_block",
-    "ignore_snapshot", false,
     "producer_send_max_retries": "100",
     "producer_queue_max_messages": "20000",
     "producer_message_max_bytes": "104857600",
@@ -34,10 +30,6 @@ An example configuration file looks like the following:
     "producer_retry_backoff_ms": "1000",
     "producer_enable_idempotence": "true",
     "max_in_flight_requests_per_connection": "5",
-    "update_account_queue_capacity": "15000",
-    "update_slot_queue_capacity": "20000",
-    "notify_transaction_queue_capacity": "15000",
-    "notify_block_queue_capacity": "15000",
     "compression_codec": "lz4",
     "compression_level": "12",
     "batch_size": "1048576000",
@@ -45,11 +37,20 @@ An example configuration file looks like the following:
     "linger_ms": "200",
     "acks": "-1",
     "statistics_interval_ms" : "0",
-    "prometheus_port": "9090",
     "message_timeout_ms": "100000",
     "kafka_log_level": "Info",
-    "global_log_level": "Info",
-    "filter_config_path": "/opt/geyser/filter_config.json"
+    "fetch_metadata": false,
+    "fetch_metadata_timeout_ms": 30000
+  },
+  "update_account_topic": "update_account",
+  "update_slot_topic": "update_slot",
+  "notify_transaction_topic": "notify_transaction",
+  "notify_block_topic": "notify_block",
+  "ignore_snapshot": false,
+  "prometheus_port": 9090,
+  "global_log_level": "Info",
+  "filter_config_path": "test-filter-config.json",
+  "log_path": "logs/geyser.log"
 }
 ```
 If filtering of accounts and transactions *is not needed*, you need to remove filter_config_path from your config and build the project with:
@@ -65,4 +66,3 @@ To configure the logging level for librdkafka you should use:
 RUST_LOG="librdkafka=trace,rdkafka::client=debug"
 ```
 This will configure the logging level of librdkafka to trace, and the level of the client module of the Rust client to debug.
-

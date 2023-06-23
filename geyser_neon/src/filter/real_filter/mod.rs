@@ -13,7 +13,6 @@ use crate::geyser_neon_config::GeyserPluginKafkaConfig;
 mod filter_config;
 mod filter_config_hot_reload;
 
-#[derive(Default)]
 pub struct RealFilter {
     watcher_helper: Arc<WatcherHelper>,
 }

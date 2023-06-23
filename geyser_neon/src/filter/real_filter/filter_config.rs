@@ -3,7 +3,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct FilterConfig {
     // Filter by account owners in base58
     pub filter_include_owners: Vec<String>,
@@ -28,7 +28,7 @@ impl FilterConfig {
     }
 }
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq)]
 pub struct FilterConfigKeys {
     pub filter_include_owners: AHashSet<Vec<u8>>,
     pub filter_include_pubkeys: AHashSet<Vec<u8>>,

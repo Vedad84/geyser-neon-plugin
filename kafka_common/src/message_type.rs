@@ -3,7 +3,9 @@ use crate::kafka_structs::{
 };
 use std::fmt;
 
+#[derive(Debug)]
 pub enum MessageType {
+    UpdateAccountStartup,
     UpdateAccount,
     UpdateSlot,
     NotifyTransaction,
@@ -13,6 +15,7 @@ pub enum MessageType {
 impl fmt::Display for MessageType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            MessageType::UpdateAccountStartup => write!(f, "UpdateAccountStartup"),
             MessageType::UpdateAccount => write!(f, "UpdateAccount"),
             MessageType::UpdateSlot => write!(f, "UpdateSlot"),
             MessageType::NotifyTransaction => write!(f, "NotifyTransaction"),
@@ -50,7 +53,11 @@ impl GetMessageType for NotifyTransaction {
 
 impl GetMessageType for UpdateAccount {
     fn get_type(&self) -> MessageType {
-        MessageType::UpdateAccount
+        if self.is_startup {
+            MessageType::UpdateAccountStartup
+        } else {
+            MessageType::UpdateAccount
+        }
     }
 
     fn get_slot(&self) -> u64 {

@@ -11,7 +11,6 @@ use crate::filter::real_filter::filter_config::{
     read_filter_config, FilterConfig, FilterConfigKeys,
 };
 
-#[derive(Default)]
 pub struct WatcherHelper {
     filter_config_path: String,
     pub current_filter_config: RwLock<(FilterConfigKeys, FilterConfig)>,

@@ -11,170 +11,192 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
+use log::info;
 use prometheus_client::{encoding::text::encode, registry::Registry};
-use tokio::signal::unix::{signal, SignalKind};
 
-use crate::{geyser_neon_config::GeyserPluginKafkaConfig, kafka_producer_stats::Stats};
+use tokio::sync::oneshot::Receiver;
 
-pub async fn start_prometheus(stats: Arc<Stats>, config: Arc<GeyserPluginKafkaConfig>, port: u16) {
-    let mut registry = <Registry>::default();
+use crate::stats::TopicStats;
+use crate::{geyser_neon_config::GeyserPluginKafkaConfig, stats::Stats};
+
+pub fn build_registry(stats: &Stats, config: &GeyserPluginKafkaConfig) -> Registry {
+    let mut registry = Registry::with_prefix("neon_plugin");
 
     registry.register(
-        "neon_plugin_update_account_queue_len",
-        "How many events are currently in a account queue",
-        stats.update_account_queue_len.clone(),
+        "msg_cnt",
+        "The current number of messages in producer queues.",
+        stats.msg_cnt.clone(),
     );
 
     registry.register(
-        "neon_plugin_update_slot_queue_len",
-        "How many events are currently in a slot queue",
-        stats.update_slot_queue_len.clone(),
+        "msg_size",
+        "The current total size of messages in producer queues.",
+        stats.msg_size.clone(),
     );
 
     registry.register(
-        "neon_plugin_notify_transaction_queue_len",
-        "How many events are currently in a transaction queue",
-        stats.notify_transaction_queue_len.clone(),
+        "msg_max",
+        "The maximum number of messages allowed in the producer queues.",
+        stats.msg_max.clone(),
     );
 
     registry.register(
-        "neon_plugin_notify_block_queue_len",
-        "How many events are currently in a block queue",
-        stats.notify_block_queue_len.clone(),
+        "msg_size_max",
+        "The maximum total size of messages allowed in the producer queues.",
+        stats.msg_size_max.clone(),
     );
 
     registry.register(
-        "neon_plugin_ordering_queue_len",
-        "How many account are pending in ordering queue",
+        "tx",
+        "The total number of requests sent to brokers.",
+        stats.tx.clone(),
+    );
+
+    registry.register(
+        "tx_bytes",
+        "The total number of bytes transmitted to brokers.",
+        stats.tx_bytes.clone(),
+    );
+
+    registry.register(
+        "txmsgs",
+        "The total number of messages transmitted (produced) to brokers.",
+        stats.txmsgs.clone(),
+    );
+
+    registry.register(
+        "txmsgs_bytes",
+        "The total number of bytes transmitted (produced) to brokers.",
+        stats.txmsg_bytes.clone(),
+    );
+
+    registry.register(
+        "txerrs",
+        "The total number of transmission errors.",
+        stats.txerrs.clone(),
+    );
+
+    registry.register(
+        "num_brokers",
+        "The number of brokers",
+        stats.num_brokers.clone(),
+    );
+
+    registry.register(
+        "ordering_queue_len",
+        "How many accounts are pending in ordering queue",
         stats.ordering_queue_len.clone(),
     );
 
     registry.register(
-        "neon_plugin_filtered_events",
+        "filtered_events",
         "How many events were skipped by filter",
         stats.filtered_events.clone(),
     );
 
     registry.register(
-        "neon_plugin_kafka_bytes_sent",
-        "How many bytes were sent to Kafka cluster",
-        stats.kafka_bytes_tx.clone(),
+        "producer_recreations",
+        "How many times the producer has been recreated successfully",
+        stats.producer_recreations.clone(),
     );
 
     registry.register(
-        "neon_plugin_kafka_errors_serialize",
-        "How many messages have not been serialized",
-        stats.kafka_errors_serialize.clone(),
+        "producer_recreation_errors",
+        "How many times the producer has been recreated with errors",
+        stats.producer_recreation_errors.clone(),
     );
 
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.update_account_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_sent",
-        "How many UpdateAccount messages have been sent",
-        stats.kafka_update_account.clone(),
+    add_metrics_for_topic(
+        &mut registry,
+        &stats.update_account_startup,
+        &format!("{}_startup", config.update_account_topic),
+    );
+    add_metrics_for_topic(
+        &mut registry,
+        &stats.update_account,
+        &config.update_account_topic,
+    );
+    add_metrics_for_topic(&mut registry, &stats.update_slot, &config.update_slot_topic);
+    add_metrics_for_topic(
+        &mut registry,
+        &stats.notify_transaction,
+        &config.notify_transaction_topic,
+    );
+    add_metrics_for_topic(
+        &mut registry,
+        &stats.notify_block,
+        &config.notify_block_topic,
     );
 
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.update_slot_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_sent",
-        "How many UpdateSlot messages have been sent",
-        stats.kafka_update_slot.clone(),
-    );
-
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.notify_transaction_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_sent",
-        "How many NotifyTransaction messages have been sent",
-        stats.kafka_notify_transaction.clone(),
-    );
-
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.notify_block_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_sent",
-        "How many NotifyBlock messages have been sent",
-        stats.kafka_notify_block.clone(),
-    );
-
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.update_account_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_unsent",
-        "How many UpdateAccount messages have not been sent",
-        stats.kafka_errors_update_account.clone(),
-    );
-
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.update_slot_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_unsent",
-        "How many UpdateSlot messages have not been sent",
-        stats.kafka_errors_update_slot.clone(),
-    );
-
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.notify_transaction_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_unsent",
-        "How many NotifyTransaction messages have not been sent",
-        stats.kafka_errors_notify_transaction.clone(),
-    );
-
-    let registry_with_label = registry.sub_registry_with_label((
-        Cow::Borrowed("topic"),
-        Cow::from(config.notify_block_topic.clone()),
-    ));
-
-    registry_with_label.register(
-        "neon_plugin_kafka_messages_unsent",
-        "How many NotifyBlock messages have not been sent",
-        stats.kafka_errors_notify_block.clone(),
-    );
-
-    let metrics_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
-    start_metrics_server(metrics_addr, registry).await
+    registry
 }
 
-async fn start_metrics_server(metrics_addr: SocketAddr, registry: Registry) {
-    let mut shutdown_stream = signal(SignalKind::terminate()).unwrap();
+fn add_metrics_for_topic(registry: &mut Registry, stats: &TopicStats, topic: &str) {
+    let registry_with_label =
+        registry.sub_registry_with_label((Cow::Borrowed("topic"), Cow::from(topic.to_string())));
 
-    println!("Starting metrics server on {metrics_addr}");
+    registry_with_label.register(
+        "serialize_errors",
+        format!("Count of {topic} messages serialize errors"),
+        stats.serialize_errors.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_enqueued",
+        format!("Count of {topic} messages successfully enqueued"),
+        stats.enqueued.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_enqueue_retries",
+        format!("Count of {topic} messages enqueue retries"),
+        stats.enqueue_retries.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_enqueue_errors",
+        format!("Count of {topic} messages enqueue errors"),
+        stats.enqueue_errors.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_sent",
+        format!("Count of {topic} messages successfully sent"),
+        stats.sent.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_send_errors",
+        format!("Count of {topic} messages send errors"),
+        stats.send_errors.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_batch_size_p95",
+        format!("Batch size p95 for {topic}"),
+        stats.batch_size.p95.clone(),
+    );
+
+    registry_with_label.register(
+        "kafka_messages_batch_cnt_p95",
+        format!("Batch count p95 for {topic}"),
+        stats.batch_cnt.p95.clone(),
+    );
+}
+
+pub async fn start_metrics_server(registry: Registry, port: u16, shutdown_rx: Receiver<()>) {
+    let metrics_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+    info!("Starting metrics server on {metrics_addr}");
 
     let registry = Arc::new(registry);
     Server::bind(&metrics_addr)
         .serve(make_service_fn(move |_conn| {
             let registry = registry.clone();
-            async move {
-                let handler = make_handler(registry);
-                Ok::<_, io::Error>(service_fn(handler))
-            }
+            async move { Ok::<_, io::Error>(service_fn(make_handler(registry))) }
         }))
         .with_graceful_shutdown(async move {
-            shutdown_stream.recv().await;
+            shutdown_rx.await.ok();
+            info!("Drop: Metrics server received shutdown token");
         })
         .await
         .expect("Failed to bind hyper server with graceful_shutdown");
@@ -189,7 +211,7 @@ fn make_handler(
         Box::pin(async move {
             let mut buf = String::new();
             encode(&mut buf, &reg.clone())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
                 .map(|_| {
                     let body = Body::from(buf);
                     Response::builder()

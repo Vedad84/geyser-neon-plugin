@@ -251,3 +251,34 @@ pub struct UpdateSlotStatus {
     pub status: KafkaSlotStatus,
     pub retrieved_time: NaiveDateTime,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() -> anyhow::Result<()> {
+        let update_account = UpdateAccount {
+            account: KafkaReplicaAccountInfoVersions::V0_0_2(KafkaReplicaAccountInfoV2 {
+                pubkey: b"123".to_vec(),
+                lamports: 0,
+                owner: vec![],
+                executable: false,
+                rent_epoch: 0,
+                data: b"abcx".to_vec(),
+                write_version: 0,
+                txn_signature: None,
+            }),
+            slot: 0,
+            is_startup: false,
+            retrieved_time: NaiveDateTime::parse_from_str(
+                "2023-06-16T12:07:36.517958",
+                "%Y-%m-%dT%H:%M:%S%.f",
+            )?,
+        };
+
+        assert_eq!(serde_json::to_string(&update_account)?, "{\"pubkey\":[49,50,51],\"lamports\":0,\"owner\":[],\"executable\":false,\"rent_epoch\":0,\"data\":[97,98,99,120],\"write_version\":0,\"txn_signature\":null,\"slot\":0,\"is_startup\":false,\"retrieved_time\":\"2023-06-16T12:07:36.517958\"}");
+
+        Ok(())
+    }
+}

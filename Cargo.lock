@@ -1669,6 +1669,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_derive",
+ "serde_json",
  "serde_with",
  "solana-account-decoder",
  "solana-geyser-plugin-interface",
